@@ -25,6 +25,7 @@ namespace GitClient.Forms
             this.remoteLabel = new GitClient.Controls.TextLabel();
             this.remoteButton = new GitClient.Controls.CommandButton();
             this.removeButton = new GitClient.Controls.CommandButton();
+            this.createButton = new GitClient.Controls.CommandButton();
             this.nameLabel = new GitClient.Controls.TextLabel();
             this.nameBox = new ModernWinForms.ModernTextBox();
             this.urlLabel = new GitClient.Controls.TextLabel();
@@ -95,6 +96,20 @@ namespace GitClient.Forms
             this.removeButton.Text = "Remove";
             this.removeButton.TextSizePx = 13.5F;
             this.removeButton.Click += new System.EventHandler(this.removeButton_Click);
+            //
+            // createButton
+            //
+            this.createButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.createButton.Appearance = GitClient.Controls.ButtonAppearance.Subtle;
+            this.createButton.CornerRadius = 5;
+            this.createButton.Location = new System.Drawing.Point(366, 100);
+            this.createButton.Name = "createButton";
+            this.createButton.PaddingX = 12;
+            this.createButton.Size = new System.Drawing.Size(174, 34);
+            this.createButton.TabIndex = 5;
+            this.createButton.Text = "Create on GitHub...";
+            this.createButton.TextSizePx = 13.5F;
+            this.createButton.Click += new System.EventHandler(this.createButton_Click);
             //
             // nameLabel
             //
@@ -198,6 +213,7 @@ namespace GitClient.Forms
             this.content.Controls.Add(this.remoteLabel);
             this.content.Controls.Add(this.remoteButton);
             this.content.Controls.Add(this.removeButton);
+            this.content.Controls.Add(this.createButton);
             this.content.Controls.Add(this.nameLabel);
             this.content.Controls.Add(this.nameBox);
             this.content.Controls.Add(this.urlLabel);
@@ -231,6 +247,7 @@ namespace GitClient.Forms
         private GitClient.Controls.TextLabel remoteLabel;
         private GitClient.Controls.CommandButton remoteButton;
         private GitClient.Controls.CommandButton removeButton;
+        private GitClient.Controls.CommandButton createButton;
         private GitClient.Controls.TextLabel nameLabel;
         private ModernWinForms.ModernTextBox nameBox;
         private GitClient.Controls.TextLabel urlLabel;

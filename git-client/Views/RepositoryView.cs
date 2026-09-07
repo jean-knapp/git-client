@@ -856,22 +856,29 @@ namespace GitClient.Views
                 var remotes = await _repository.GetRemotesAsync();
                 if (remotes.Count == 0)
                 {
-                    if (!Dialogs.Confirm(this, "Push",
+                    var choice = Dialogs.Show(this, "Push",
                         "This repository has no remote yet, so there is nowhere to push."
                         + Environment.NewLine + Environment.NewLine +
-                        "Add one now? Paste the repository's GitHub URL and this branch will be published to it.",
-                        "Add a remote...")) return;
-                    remotes = await ShowRemoteDialogAsync();
+                        "Create it on GitHub now, or point it at a repository that already exists.",
+                        "Create on GitHub...", "Add a remote...", "Cancel");
+                    if (choice == DialogResult.Cancel) return;
+                    remotes = choice == DialogResult.OK
+                        ? await ShowCreateOnGitHubAsync("origin", false)
+                        : await ShowRemoteDialogAsync();
                     if (remotes.Count == 0) return;
                 }
                 remote = remotes.Contains("origin") ? "origin" : remotes[0];
             }
+            bool missingOnRemote = false;
             await ExecuteAsync("Pushing...", async () =>
             {
                 var result = await WithCredentialRetryAsync("Push",
                     () => _repository.PushAsync(remote, _status.Branch, needsUpstream, force, CreateProgress(), CancellationToken.None));
-                ReportResult(result, "Push", "Push finished.");
+                missingOnRemote = !result.Succeeded && LooksLikeMissingRepository(result.Message);
+                if (!missingOnRemote) ReportResult(result, "Push", "Push finished.");
             });
+
+            if (missingOnRemote) await OfferToCreateMissingRepositoryAsync(remote);
         }
 
         /// <summary>
@@ -918,6 +925,61 @@ namespace GitClient.Views
             }
             await RefreshAsync();
             return true;
+        }
+
+        /// <summary>git says this when the remote URL points at a repository that is not there.</summary>
+        private static bool LooksLikeMissingRepository(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return false;
+            return message.IndexOf("Repository not found", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("does not appear to be a git repository", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private async Task OfferToCreateMissingRepositoryAsync(string remote)
+        {
+            var url = await _repository.GetRemoteUrlAsync(remote ?? "origin");
+            bool github = (url ?? string.Empty).IndexOf("github.com", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            var choice = Dialogs.Show(this, "Push",
+                (url ?? "The remote") + " does not exist, or the account signed in cannot see it."
+                + Environment.NewLine + Environment.NewLine +
+                (github
+                    ? "Create it on GitHub now, or point the remote somewhere else."
+                    : "Create a repository on GitHub for this project, or point the remote somewhere else."),
+                "Create on GitHub...", "Edit the remote...", "Cancel");
+            if (choice == DialogResult.Cancel) return;
+
+            if (choice == DialogResult.OK) await ShowCreateOnGitHubAsync(remote ?? "origin", true);
+            else await ShowRemoteDialogAsync();
+        }
+
+        private void createOnGitHubItem_Click(object sender, EventArgs e) => CreateOnGitHubCommand();
+
+        private async void CreateOnGitHubCommand() => await ShowCreateOnGitHubAsync("origin", true);
+
+        /// <summary>
+        /// Creates the repository on GitHub, points a remote at it and (when asked) publishes the
+        /// current branch. Returns the remotes that exist afterwards.
+        /// </summary>
+        private async Task<List<string>> ShowCreateOnGitHubAsync(string remote, bool pushWhenAsked)
+        {
+            if (_repository == null) return new List<string>();
+            bool push = false;
+            GitHubRepository created = null;
+            using (var dialog = new CreateRepositoryDialog(_repository, _repository.Name, remote))
+            {
+                if (dialog.ShowDialog(FindForm()) == DialogResult.OK)
+                {
+                    created = dialog.CreatedRepository;
+                    push = dialog.PushRequested;
+                }
+            }
+            if (created == null) return await _repository.GetRemotesAsync();
+
+            statusMessageLabel.Text = "Created " + created.FullName + ".";
+            await RefreshAsync();
+            if (push && pushWhenAsked && !_status.IsDetached) await PushAsync(true, false);
+            return await _repository.GetRemotesAsync();
         }
 
         private void remotesItem_Click(object sender, EventArgs e) => ShowRemotesCommand();

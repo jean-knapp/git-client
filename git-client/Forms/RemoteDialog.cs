@@ -154,6 +154,28 @@ namespace GitClient.Forms
             statusLabel.Text = "Removed " + name + ".";
         }
 
+        /// <summary>Creates the repository on GitHub and points this remote at it.</summary>
+        private async void createButton_Click(object sender, EventArgs e)
+        {
+            var name = nameBox.Text.Trim();
+            using (var dialog = new CreateRepositoryDialog(_repository, System.IO.Path.GetFileName(_repository.WorkingDirectory),
+                name.Length > 0 ? name : "origin"))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                Changed = true;
+                CreatedOnGitHub = dialog.CreatedRepository;
+                PushRequested = dialog.PushRequested;
+                await LoadAsync(null);
+                statusLabel.Text = "Created " + dialog.CreatedRepository.FullName + " and pointed " + CurrentRemoteName + " at it.";
+            }
+        }
+
+        /// <summary>The repository just created on GitHub, when the user made one.</summary>
+        public GitHubRepository CreatedOnGitHub { get; private set; }
+
+        /// <summary>True when that flow asked for the branch to be pushed afterwards.</summary>
+        public bool PushRequested { get; private set; }
+
         private void Fail(GitResult result)
         {
             statusLabel.Text = string.IsNullOrWhiteSpace(result.Message) ? "git refused the change." : result.Message.Trim();

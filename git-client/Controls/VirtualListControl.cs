@@ -190,37 +190,41 @@ namespace GitClient.Controls
             var g = e.Graphics;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-            if (HeaderHeight > 0) PaintHeader(g, new Rectangle(0, 0, Width, HeaderHeight));
-
             int count = RowCount;
             if (count == 0 && !string.IsNullOrEmpty(EmptyText))
             {
                 Draw.Text(g, EmptyText, Fonts.Ui(13f), new Rectangle(24, ViewportTop, Math.Max(0, Width - 48), ViewportHeight),
                     P.Foreground3, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
-                return;
             }
-
-            var clip = new Rectangle(0, ViewportTop, Width, ViewportHeight);
-            var saved = g.Clip;
-            g.SetClip(clip);
-
-            int y = ViewportTop - _scroll;
-            for (int i = 0; i < count; i++)
+            else
             {
-                int h = GetRowHeight(i);
-                if (y + h > ViewportTop && y < Height)
+                var clip = new Rectangle(0, ViewportTop, Width, ViewportHeight);
+                var saved = g.Clip;
+                g.SetClip(clip);
+
+                int y = ViewportTop - _scroll;
+                for (int i = 0; i < count; i++)
                 {
-                    var state = RowState.None;
-                    if (i == _hotRow) state |= RowState.Hot;
-                    if (IsSelected(i)) state |= RowState.Selected;
-                    if (Focused) state |= RowState.Focused;
-                    PaintRow(g, i, new Rectangle(0, y, Width, h), state);
+                    int h = GetRowHeight(i);
+                    if (y + h > ViewportTop && y < Height)
+                    {
+                        var state = RowState.None;
+                        if (i == _hotRow) state |= RowState.Hot;
+                        if (IsSelected(i)) state |= RowState.Selected;
+                        if (Focused) state |= RowState.Focused;
+                        PaintRow(g, i, new Rectangle(0, y, Width, h), state);
+                    }
+                    y += h;
+                    if (y >= Height) break;
                 }
-                y += h;
-                if (y >= Height) break;
+
+                g.Clip = saved;
             }
 
-            g.Clip = saved;
+            // The header paints over the rows, not under them: row text goes through GDI
+            // (TextRenderer), which ignores the clip region above, so a row scrolled halfway under
+            // the header would otherwise write its text across the column titles.
+            if (HeaderHeight > 0) PaintHeader(g, new Rectangle(0, 0, Width, HeaderHeight));
             PaintScrollThumb(g);
         }
 

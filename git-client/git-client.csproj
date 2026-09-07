@@ -43,6 +43,7 @@
     <Reference Include="System.Deployment" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Net.Http" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
   </ItemGroup>
@@ -115,6 +116,12 @@
     <Compile Include="Forms\RemoteDialog.Designer.cs">
       <DependentUpon>RemoteDialog.cs</DependentUpon>
     </Compile>
+    <Compile Include="Forms\CreateRepositoryDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\CreateRepositoryDialog.Designer.cs">
+      <DependentUpon>CreateRepositoryDialog.cs</DependentUpon>
+    </Compile>
     <Compile Include="Forms\MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -159,6 +166,8 @@
     <Compile Include="Services\FolderPicker.cs" />
     <Compile Include="Services\GitIgnoreFile.cs" />
     <Compile Include="Services\GitIgnoreTemplates.cs" />
+    <Compile Include="Services\GitHubAuth.cs" />
+    <Compile Include="Services\GitHubClient.cs" />
     <Compile Include="Services\Theme.cs" />
     <Compile Include="Views\RepositoryView.cs">
       <SubType>UserControl</SubType>
