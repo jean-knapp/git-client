@@ -29,10 +29,6 @@ namespace GitClient.Controls
         private const int GutterPad1 = 10;
         private const int GutterPad2 = 12;
         private const int CodePad = 12;
-        private const int ThumbSize = 4;
-        private const int ThumbInset = 4;
-        private const int ThumbMargin = 6;
-        private const int MinThumb = 24;
 
         private sealed class Pair
         {
@@ -47,12 +43,12 @@ namespace GitClient.Controls
         private readonly List<Pair> _pairs = new List<Pair>();
         private int _scrollY;
         private int _scrollX;
+        private readonly ModernScrollBar _vScroll;
+        private readonly ModernScrollBar _hScroll;
+        private bool _syncingBars;
         private int _maxColumns;
         private float _fontSizePx = 12.5f;
         private string _emptyText = "Select a file to see its changes.";
-        private bool _draggingV;
-        private bool _draggingH;
-        private int _dragOffset;
 
         public DiffViewControl()
         {
@@ -60,6 +56,14 @@ namespace GitClient.Controls
             TabStop = true;
             BackColor = Color.Transparent;
             Theme.Changed += (s, e) => Invalidate();
+
+            _vScroll = new ModernScrollBar { Orientation = Orientation.Vertical, Visible = false, TabStop = false, Width = ScrollBarWidth };
+            _hScroll = new ModernScrollBar { Orientation = Orientation.Horizontal, Visible = false, TabStop = false, Height = ScrollBarWidth };
+            _vScroll.Scroll += (s, e) => { if (!_syncingBars) { _scrollY = e.NewValue; SyncScrollBars(); Invalidate(); } };
+            _hScroll.Scroll += (s, e) => { if (!_syncingBars) { _scrollX = e.NewValue; SyncScrollBars(); Invalidate(); } };
+            Controls.Add(_vScroll);
+            Controls.Add(_hScroll);
+            ApplyScrollBarColors();
         }
 
         [Browsable(false)]
@@ -114,6 +118,7 @@ namespace GitClient.Controls
             }
             _scrollY = Math.Max(0, Math.Min(_scrollY, MaxScrollY));
             _scrollX = Math.Max(0, Math.Min(_scrollX, MaxScrollX));
+            SyncScrollBars();
             Invalidate();
         }
 
@@ -243,7 +248,7 @@ namespace GitClient.Controls
                 Draw.VLine(g, PaneWidth, 0, Height, divider);
             }
 
-            PaintThumbs(g, surface);
+            SurfacePanel.PaintRoundedParentCorners(g, this);
         }
 
         private void PaintPair(Graphics g, Pair pair, int y, Color surface, Color divider)
@@ -334,36 +339,62 @@ namespace GitClient.Controls
             PaintCode(g, line, codeStart, y, Math.Max(0, x + width - codeStart), fore);
         }
 
-        private void PaintThumbs(Graphics g, Color surface)
+        /// <summary>Thickness of the library scroll bars docked at the right and bottom edges.</summary>
+        private const int ScrollBarWidth = 12;
+
+        private void ApplyScrollBarColors()
         {
             var p = Theme.Palette;
-            var v = VerticalThumb();
-            if (!v.IsEmpty) Draw.FillRounded(g, v, ThumbSize / 2f, p.Fill2On(surface));
-            var h = HorizontalThumb();
-            if (!h.IsEmpty) Draw.FillRounded(g, h, ThumbSize / 2f, p.Fill2On(surface));
+            foreach (var bar in new[] { _vScroll, _hScroll })
+            {
+                if (bar == null) continue;
+                bar.UseParentSkin = false;
+                bar.ScrollBarColors.TrackColor = Color.Transparent;
+                bar.ScrollBarColors.ThumbColor = p.Fill2On(Surface);
+                bar.ScrollBarColors.ThumbHoverColor = p.Foreground3;
+                bar.BackColor = Surface;
+            }
         }
 
-        private Rectangle VerticalThumb()
+        /// <summary>Puts the two bars where the content needs them and matches their ranges.</summary>
+        private void SyncScrollBars()
         {
-            if (ContentHeight <= Height || Height <= 0) return Rectangle.Empty;
-            int track = Height - ThumbMargin * 2;
-            if (track <= MinThumb) return Rectangle.Empty;
-            int height = Math.Max(MinThumb, (int)((long)track * Height / ContentHeight));
-            int travel = track - height;
-            int offset = MaxScrollY <= 0 ? 0 : (int)((long)travel * _scrollY / MaxScrollY);
-            return new Rectangle(Width - ThumbInset - ThumbSize, ThumbMargin + offset, ThumbSize, height);
-        }
+            if (_vScroll == null || _hScroll == null) return;
+            bool vertical = ContentHeight > Height && Height > 0;
+            bool horizontal = MaxScrollX > 0 && Width > 0;
 
-        private Rectangle HorizontalThumb()
-        {
-            if (MaxScrollX <= 0 || Width <= 0) return Rectangle.Empty;
-            int track = Width - ThumbMargin * 2;
-            int content = _maxColumns * CharWidth + 24;
-            if (track <= MinThumb || content <= 0) return Rectangle.Empty;
-            int width = Math.Max(MinThumb, (int)((long)track * CodeWidth / content));
-            int travel = track - width;
-            int offset = (int)((long)travel * _scrollX / MaxScrollX);
-            return new Rectangle(ThumbMargin + offset, Height - ThumbInset - ThumbSize, width, ThumbSize);
+            _syncingBars = true;
+            try
+            {
+                _vScroll.Visible = vertical;
+                _hScroll.Visible = horizontal;
+
+                int bottomInset = SurfacePanel.RoundedParentBottomInset(this);
+                if (vertical)
+                {
+                    int height = Math.Max(0, Height - (horizontal ? ScrollBarWidth : 0) - bottomInset);
+                    _vScroll.SetBounds(Width - ScrollBarWidth, 0, ScrollBarWidth, height);
+                    _vScroll.Minimum = 0;
+                    _vScroll.Maximum = Math.Max(0, MaxScrollY + height);
+                    _vScroll.LargeChange = height;
+                    _vScroll.SmallChange = RowHeight;
+                    _vScroll.Value = Math.Max(0, Math.Min(_scrollY, _vScroll.MaximumScrollValue));
+                }
+                if (horizontal)
+                {
+                    int width = Math.Max(0, Width - (vertical ? ScrollBarWidth : 0) - bottomInset);
+                    _hScroll.SetBounds(bottomInset > 0 ? bottomInset : 0, Height - ScrollBarWidth - (bottomInset > 0 ? 1 : 0), width, ScrollBarWidth);
+                    _hScroll.Minimum = 0;
+                    _hScroll.Maximum = Math.Max(0, MaxScrollX + width);
+                    _hScroll.LargeChange = width;
+                    _hScroll.SmallChange = CharWidth * 4;
+                    _hScroll.Value = Math.Max(0, Math.Min(_scrollX, _hScroll.MaximumScrollValue));
+                }
+            }
+            finally
+            {
+                _syncingBars = false;
+            }
         }
 
         // ------------------------------------------------------------------ input
@@ -380,6 +411,7 @@ namespace GitClient.Controls
             {
                 _scrollY = Math.Max(0, Math.Min(MaxScrollY, _scrollY - notches * RowHeight * 3));
             }
+            SyncScrollBars();
             Invalidate();
         }
 
@@ -387,51 +419,6 @@ namespace GitClient.Controls
         {
             base.OnMouseDown(e);
             Focus();
-            if (e.Button != MouseButtons.Left) return;
-            var v = VerticalThumb();
-            if (!v.IsEmpty && v.Contains(e.Location)) { _draggingV = true; _dragOffset = e.Y - v.Y; Capture = true; return; }
-            var h = HorizontalThumb();
-            if (!h.IsEmpty && h.Contains(e.Location)) { _draggingH = true; _dragOffset = e.X - h.X; Capture = true; }
-        }
-
-        protected override void OnMouseMove(MouseEventArgs e)
-        {
-            base.OnMouseMove(e);
-            if (_draggingV)
-            {
-                int track = Height - ThumbMargin * 2;
-                var thumb = VerticalThumb();
-                int travel = track - thumb.Height;
-                if (travel > 0)
-                {
-                    int offset = Math.Max(0, Math.Min(travel, e.Y - _dragOffset - ThumbMargin));
-                    _scrollY = (int)((long)offset * MaxScrollY / travel);
-                    Invalidate();
-                }
-            }
-            else if (_draggingH)
-            {
-                int track = Width - ThumbMargin * 2;
-                var thumb = HorizontalThumb();
-                int travel = track - thumb.Width;
-                if (travel > 0)
-                {
-                    int offset = Math.Max(0, Math.Min(travel, e.X - _dragOffset - ThumbMargin));
-                    _scrollX = (int)((long)offset * MaxScrollX / travel);
-                    Invalidate();
-                }
-            }
-        }
-
-        protected override void OnMouseUp(MouseEventArgs e)
-        {
-            base.OnMouseUp(e);
-            if (_draggingV || _draggingH)
-            {
-                _draggingV = false;
-                _draggingH = false;
-                Capture = false;
-            }
         }
 
         protected override bool IsInputKey(Keys keyData)
@@ -489,6 +476,7 @@ namespace GitClient.Controls
             base.OnResize(e);
             _scrollY = Math.Max(0, Math.Min(_scrollY, MaxScrollY));
             _scrollX = Math.Max(0, Math.Min(_scrollX, MaxScrollX));
+            SyncScrollBars();
         }
     }
 }

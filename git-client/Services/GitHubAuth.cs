@@ -126,6 +126,23 @@ namespace GitClient.Services
             }
         }
 
+        /// <summary>
+        /// git config key that tells the credential helper which GitHub account to use. Without
+        /// it, Git Credential Manager shows its "Select an account" window on every push when more
+        /// than one account is stored.
+        /// </summary>
+        public const string AccountConfigKey = "credential.https://github.com.username";
+
+        /// <summary>The account git is told to use for github.com, or null when it may choose.</summary>
+        public static async Task<string> GetPreferredAccountAsync()
+        {
+            var value = await GitRepository.GetGlobalConfigAsync(AccountConfigKey).ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+
+        public static Task SetPreferredAccountAsync(string login) =>
+            GitRepository.SetGlobalConfigAsync(AccountConfigKey, login);
+
         /// <summary>Page that creates a token with exactly the scopes this client needs.</summary>
         public const string TokenPageUrl =
             "https://github.com/settings/tokens/new?scopes=repo,read:org&description=Git%20Client";

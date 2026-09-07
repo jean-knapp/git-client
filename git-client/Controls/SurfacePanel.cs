@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using GitClient.Services;
 using ModernWinForms;
@@ -50,14 +51,14 @@ namespace GitClient.Controls
         public SurfaceKind Surface
         {
             get => _surface;
-            set { _surface = value; ApplyBackColor(); ApplyCornerRegion(); Invalidate(); }
+            set { _surface = value; ApplyBackColor(); Invalidate(); }
         }
 
         [Category("Appearance"), DefaultValue(8)]
         public int CornerRadius
         {
             get => _cornerRadius;
-            set { _cornerRadius = Math.Max(0, value); ApplyCornerRegion(); Invalidate(); }
+            set { _cornerRadius = Math.Max(0, value); Invalidate(); }
         }
 
         [Category("Appearance"), DefaultValue(false)]
@@ -116,7 +117,7 @@ namespace GitClient.Controls
             }
         }
 
-        private Color ParentSurfaceColor()
+        internal Color ParentSurfaceColor()
         {
             for (var c = Parent; c != null; c = c.Parent)
             {
@@ -130,7 +131,6 @@ namespace GitClient.Controls
         {
             ApplyBackColor();
             Invalidate();
-            if (Region != null) InvalidateBehind();
         }
 
         private void ApplyBackColor()
@@ -145,7 +145,6 @@ namespace GitClient.Controls
         {
             base.OnHandleCreated(e);
             ApplyBackColor();
-            ApplyCornerRegion();
         }
 
         protected override void OnParentChanged(EventArgs e)
@@ -154,56 +153,114 @@ namespace GitClient.Controls
             ApplyBackColor();
         }
 
-        protected override void OnResize(EventArgs e)
+        /// <summary>Radius this panel rounds its outline with, 0 when it draws a plain rectangle.</summary>
+        private int EffectiveRadius =>
+            _surface == SurfaceKind.Card || _surface == SurfaceKind.Fill || _surface == SurfaceKind.Custom ? _cornerRadius : 0;
+
+        /// <summary>
+        /// Paints the rounded outline of the nearest rounded ancestor over <paramref name="child"/>.
+        /// A child docked into a card covers its corners with an opaque rectangle; instead of
+        /// clipping the card to a region - which is a hard mask and leaves the corners jagged -
+        /// every child paints back the few pixels outside the card's arc, so the corner keeps the
+        /// anti-aliased edge the card drew.
+        /// </summary>
+        /// <summary>
+        /// Finds the nearest rounded card above <paramref name="child"/> and where the child sits
+        /// inside it. Returns null when there is no rounded ancestor.
+        /// </summary>
+        private static SurfacePanel FindRoundedCard(Control child, out int offsetX, out int offsetY)
         {
-            base.OnResize(e);
-            ApplyCornerRegion();
+            offsetX = 0;
+            offsetY = 0;
+            if (child == null) return null;
+            for (var c = child; c != null; c = c.Parent)
+            {
+                var surface = c as SurfacePanel;
+                if (surface != null && !ReferenceEquals(surface, child) && surface.EffectiveRadius > 0)
+                {
+                    offsetX += child.Left;
+                    offsetY += child.Top;
+                    return surface;
+                }
+                if (!ReferenceEquals(c, child))
+                {
+                    offsetX += c.Left;
+                    offsetY += c.Top;
+                }
+            }
+            return null;
         }
 
         /// <summary>
-        /// Clips the panel to its rounded outline. Child controls paint opaque rectangles that
-        /// would otherwise square off the corners of a card.
+        /// How far a child's own children (a scroll bar, say) must stay clear of its bottom edge
+        /// to leave a rounded card's corner alone. 0 when the child does not sit on that edge.
         /// </summary>
-        private void ApplyCornerRegion()
+        public static int RoundedParentBottomInset(Control child)
         {
-            bool rounded = _cornerRadius > 0 && (_surface == SurfaceKind.Card || _surface == SurfaceKind.Fill || _surface == SurfaceKind.Custom);
-            if (!rounded)
+            int offsetX, offsetY;
+            var card = FindRoundedCard(child, out offsetX, out offsetY);
+            if (card == null) return 0;
+            int bottomGap = card.Height - (offsetY + child.Height);
+            return bottomGap <= 2 ? card.EffectiveRadius : 0;
+        }
+
+        /// <summary>
+        /// Paints the rounded outline of the nearest rounded ancestor over <paramref name="child"/>.
+        /// A child docked into a card covers its corners with an opaque rectangle; instead of
+        /// clipping the card to a region - which is a hard mask and leaves the corners jagged -
+        /// every child paints back the few pixels outside the card's arc, so the corner keeps the
+        /// anti-aliased edge the card drew.
+        /// </summary>
+        public static void PaintRoundedParentCorners(Graphics g, Control child)
+        {
+            if (child == null || g == null) return;
+
+            int offsetX, offsetY;
+            var card = FindRoundedCard(child, out offsetX, out offsetY);
+            if (card == null) return;
+
+            float radius = card.EffectiveRadius;
+            var outline = new RectangleF(-offsetX, -offsetY, card.Width, card.Height);
+            // Nothing to do unless this child actually reaches into a corner.
+            var corners = new RectangleF(outline.X, outline.Y, outline.Width, outline.Height);
+            corners.Inflate(-radius, -radius);
+            if (corners.Contains(0, 0) && corners.Contains(child.Width - 1, 0)
+                && corners.Contains(0, child.Height - 1) && corners.Contains(child.Width - 1, child.Height - 1))
             {
-                if (Region != null) { Region.Dispose(); Region = null; InvalidateBehind(); }
                 return;
             }
-            if (Width <= 0 || Height <= 0) return;
 
-            var previous = Region;
-            using (var path = Draw.RoundedRect(new RectangleF(0, 0, Width, Height), _cornerRadius))
+            var p = Theme.Palette;
+            var outside = card.ParentSurfaceColor();
+            var border = card._surface == SurfaceKind.Fill
+                ? p.StrokeOn(card.SurfaceColor)
+                : (card._surface == SurfaceKind.Custom
+                    ? ThemePalette.Flatten(card.CustomBorder, card.SurfaceColor)
+                    : p.CardStrokeOn(card.SurfaceColor));
+
+            var savedClip = g.Clip;
+            var savedSmoothing = g.SmoothingMode;
+            var savedOffset = g.PixelOffsetMode;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            using (var fillPath = Draw.RoundedRect(outline, radius))
+            using (var region = new Region(new RectangleF(0, 0, child.Width, child.Height)))
             {
-                Region = new Region(path);
+                region.Exclude(fillPath);
+                g.Clip = region;
+                using (var brush = new SolidBrush(outside)) g.FillRectangle(brush, 0, 0, child.Width, child.Height);
             }
-            previous?.Dispose();
-            InvalidateBehind();
-        }
+            g.Clip = savedClip;
 
-        /// <summary>
-        /// Repaints the parent under this panel. The corners cut away by the region are no longer
-        /// part of this window, so whoever is behind has to draw them - and nothing else asks it to.
-        /// </summary>
-        private void InvalidateBehind()
-        {
-            var parent = Parent;
-            if (parent == null || !parent.IsHandleCreated) return;
-            parent.Invalidate(new Rectangle(Left, Top, Width, Height), false);
-        }
+            using (var borderPath = Draw.RoundedRect(
+                new RectangleF(outline.X + 0.5f, outline.Y + 0.5f, outline.Width - 1f, outline.Height - 1f), radius - 0.5f))
+            using (var pen = new Pen(border))
+            {
+                g.DrawPath(pen, borderPath);
+            }
 
-        protected override void OnLocationChanged(EventArgs e)
-        {
-            base.OnLocationChanged(e);
-            if (Region != null) InvalidateBehind();
-        }
-
-        protected override void OnVisibleChanged(EventArgs e)
-        {
-            base.OnVisibleChanged(e);
-            if (Visible && Region != null) InvalidateBehind();
+            g.SmoothingMode = savedSmoothing;
+            g.PixelOffsetMode = savedOffset;
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -211,39 +268,55 @@ namespace GitClient.Controls
             var g = e.Graphics;
             var p = Theme.Palette;
             var bounds = new Rectangle(0, 0, Width, Height);
+            var fill = SurfaceColor;
+            int radius = EffectiveRadius;
 
+            if (radius == 0)
             {
-                // Even a "None" surface paints: children with a transparent BackColor ask their
-                // parent to draw the backdrop, and a panel that painted nothing would leave the
+                // A "None" surface still paints: children with a transparent BackColor ask their
+                // parent for the backdrop, and a panel that painted nothing would leave the
                 // previous frame behind them.
-                var fill = SurfaceColor;
-                if (_surface == SurfaceKind.None)
+                Draw.Fill(g, bounds, fill);
+            }
+            else
+            {
+                // Same recipe as ModernPanel: clear with what is behind the card, then lay the
+                // rounded body and its hairline on top, so the arc keeps its anti-aliased edge.
+                var border = _surface == SurfaceKind.Fill
+                    ? p.StrokeOn(fill)
+                    : (_surface == SurfaceKind.Custom ? ThemePalette.Flatten(CustomBorder, fill) : p.CardStrokeOn(fill));
+
+                var savedSmoothing = g.SmoothingMode;
+                var savedOffset = g.PixelOffsetMode;
+                var savedQuality = g.CompositingQuality;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.CompositingQuality = CompositingQuality.HighQuality;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                Draw.Fill(g, bounds, ParentSurfaceColor());
+                using (var body = Draw.RoundedRect(new RectangleF(0, 0, Width, Height), radius))
+                using (var brush = new SolidBrush(fill))
                 {
-                    Draw.Fill(g, bounds, fill);
+                    g.FillPath(brush, body);
                 }
-                else if (_surface == SurfaceKind.Card)
+                using (var outline = Draw.RoundedRect(new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f), radius - 0.5f))
+                using (var pen = new Pen(border))
                 {
-                    Draw.Card(g, new Rectangle(0, 0, Width - 1, Height - 1), _cornerRadius, fill, p.CardStrokeOn(fill));
+                    g.DrawPath(pen, outline);
                 }
-                else if (_surface == SurfaceKind.Fill)
-                {
-                    Draw.Card(g, new Rectangle(0, 0, Width - 1, Height - 1), _cornerRadius, fill, p.StrokeOn(fill));
-                }
-                else if (_surface == SurfaceKind.Custom)
-                {
-                    Draw.Card(g, new Rectangle(0, 0, Width - 1, Height - 1), _cornerRadius, fill,
-                        ThemePalette.Flatten(CustomBorder, ParentSurfaceColor()));
-                }
-                else
-                {
-                    Draw.Fill(g, bounds, fill);
-                }
+
+                g.SmoothingMode = savedSmoothing;
+                g.CompositingQuality = savedQuality;
+                g.PixelOffsetMode = savedOffset;
             }
 
-            var divider = p.DividerOn(SurfaceColor);
-            if (_topDivider) Draw.HLine(g, 0, 0, Width, _topCardStroke ? p.CardStrokeOn(SurfaceColor) : divider);
+            var divider = p.DividerOn(fill);
+            if (_topDivider) Draw.HLine(g, 0, 0, Width, _topCardStroke ? p.CardStrokeOn(fill) : divider);
             if (_bottomDivider) Draw.HLine(g, 0, Height - 1, Width, divider);
             if (_rightDivider) Draw.VLine(g, Width - 1, 0, Height, divider);
+
+            // This panel may itself be sitting in a card's corner.
+            PaintRoundedParentCorners(g, this);
         }
 
         protected override void Dispose(bool disposing)

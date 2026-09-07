@@ -46,6 +46,7 @@
             this.editIgnoreItem = new ModernWinForms.ModernContextMenuItem();
             this.remotesItem = new ModernWinForms.ModernContextMenuItem();
             this.createOnGitHubItem = new ModernWinForms.ModernContextMenuItem();
+            this.githubAccountItem = new ModernWinForms.ModernContextMenuItem();
             this.commandBar = new GitClient.Controls.SurfacePanel();
             this.branchButton = new GitClient.Controls.CommandButton();
             this.commandSeparator1 = new GitClient.Controls.SurfacePanel();
@@ -231,6 +232,7 @@
             this.overflowMenu.Items.Add(this.editIgnoreItem);
             this.overflowMenu.Items.Add(this.remotesItem);
             this.overflowMenu.Items.Add(this.createOnGitHubItem);
+            this.overflowMenu.Items.Add(this.githubAccountItem);
             this.overflowMenu.Items.Add(this.refreshItem);
             //
             // unstageAllItem
@@ -263,6 +265,11 @@
             //
             this.createOnGitHubItem.Text = "Create on GitHub...";
             this.createOnGitHubItem.Click += new System.EventHandler(this.createOnGitHubItem_Click);
+            //
+            // githubAccountItem
+            //
+            this.githubAccountItem.Text = "GitHub account...";
+            this.githubAccountItem.Click += new System.EventHandler(this.githubAccountItem_Click);
             //
             // refreshItem
             //
@@ -1310,6 +1317,7 @@
         private ModernWinForms.ModernContextMenuItem editIgnoreItem;
         private ModernWinForms.ModernContextMenuItem remotesItem;
         private ModernWinForms.ModernContextMenuItem createOnGitHubItem;
+        private ModernWinForms.ModernContextMenuItem githubAccountItem;
         private GitClient.Controls.SurfacePanel commandBar;
         private GitClient.Controls.CommandButton branchButton;
         private GitClient.Controls.SurfacePanel commandSeparator1;

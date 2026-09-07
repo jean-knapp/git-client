@@ -19,25 +19,22 @@ namespace GitClient.Controls
     }
 
     /// <summary>
-    /// Base for the owner-drawn lists in the redesign. Handles variable row heights, wheel and
-    /// drag scrolling, hover and selection, and paints the 4 px overlay scrollbar the design
-    /// specifies (no track, 2 px radius, --fill2, inset 4 px from the right edge).
+    /// Base for the owner-drawn lists in the redesign: variable row heights, wheel scrolling,
+    /// hover and selection. Scrolling is driven by a <see cref="ModernScrollBar"/> from the
+    /// control library, so every list in the application scrolls and looks the same.
     /// </summary>
     [ToolboxItem(false)]
     public abstract class VirtualListControl : ModernControl
     {
-        private const int ThumbWidth = 4;
-        private const int ThumbInset = 4;
-        private const int ThumbTopMargin = 6;
-        private const int MinThumbHeight = 24;
+        /// <summary>Width the library's bar occupies down the right edge.</summary>
+        protected const int ScrollBarWidth = 12;
 
+        private readonly ModernScrollBar _scrollBar;
         private int _scroll;
         private int _hotRow = -1;
         private readonly List<int> _selected = new List<int>();
         private int _anchor = -1;
-        private bool _draggingThumb;
-        private int _dragOffset;
-        private bool _thumbHot;
+        private bool _syncingScrollBar;
 
         /// <summary>Raised when the selection changes through user input or code.</summary>
         public event EventHandler SelectionChanged;
@@ -51,7 +48,69 @@ namespace GitClient.Controls
             SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.ResizeRedraw | ControlStyles.Selectable | ControlStyles.SupportsTransparentBackColor, true);
             TabStop = true;
             BackColor = Color.Transparent;
+
+            _scrollBar = new ModernScrollBar
+            {
+                Orientation = Orientation.Vertical,
+                Visible = false,
+                TabStop = false,
+                Width = ScrollBarWidth,
+            };
+            _scrollBar.Scroll += (s, e) =>
+            {
+                if (_syncingScrollBar) return;
+                ScrollOffset = e.NewValue;
+            };
+            Controls.Add(_scrollBar);
+
             Theme.Changed += OnThemeChanged;
+            ApplyScrollBarColors();
+        }
+
+        /// <summary>The library scroll bar, so subclasses can measure around it.</summary>
+        protected ModernScrollBar ScrollBar => _scrollBar;
+
+        /// <summary>Width taken by the scroll bar right now, 0 when it is hidden.</summary>
+        protected int ScrollBarSpace => _scrollBar != null && _scrollBar.Visible ? ScrollBarWidth : 0;
+
+        private void ApplyScrollBarColors()
+        {
+            if (_scrollBar == null) return;
+            _scrollBar.UseParentSkin = false;
+            _scrollBar.ScrollBarColors.TrackColor = Color.Transparent;
+            _scrollBar.ScrollBarColors.ThumbColor = P.Fill2On(RowSurface);
+            _scrollBar.ScrollBarColors.ThumbHoverColor = P.Foreground3;
+            _scrollBar.BackColor = RowSurface;
+        }
+
+        /// <summary>Keeps the bar's range, position and visibility in step with the content.</summary>
+        private void SyncScrollBar()
+        {
+            if (_scrollBar == null) return;
+            int viewport = ViewportHeight;
+            int total = TotalHeight;
+            bool needed = viewport > 0 && total > viewport;
+
+            _syncingScrollBar = true;
+            try
+            {
+                if (_scrollBar.Visible != needed) _scrollBar.Visible = needed;
+                if (!needed) return;
+
+                // Stop short of a rounded card's corner, which this control has to paint itself.
+                int bottomInset = SurfacePanel.RoundedParentBottomInset(this);
+                _scrollBar.SetBounds(Width - ScrollBarWidth, ViewportTop, ScrollBarWidth, Math.Max(0, viewport - bottomInset));
+                _scrollBar.Minimum = 0;
+                _scrollBar.Maximum = Math.Max(0, total);
+                _scrollBar.LargeChange = viewport;
+                _scrollBar.SmallChange = DefaultScrollStep;
+                int value = Math.Max(0, Math.Min(_scroll, _scrollBar.MaximumScrollValue));
+                if (_scrollBar.Value != value) _scrollBar.Value = value;
+            }
+            finally
+            {
+                _syncingScrollBar = false;
+            }
         }
 
         protected ThemePalette P => Theme.Palette;
@@ -100,6 +159,7 @@ namespace GitClient.Controls
                 int clamped = Math.Max(0, Math.Min(value, MaxScroll));
                 if (clamped == _scroll) return;
                 _scroll = clamped;
+                SyncScrollBar();
                 Invalidate();
             }
         }
@@ -183,7 +243,11 @@ namespace GitClient.Controls
 
         // ------------------------------------------------------------------ painting
 
-        protected virtual void OnThemeChanged(object sender, EventArgs e) => Invalidate();
+        protected virtual void OnThemeChanged(object sender, EventArgs e)
+        {
+            ApplyScrollBarColors();
+            Invalidate();
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -198,7 +262,9 @@ namespace GitClient.Controls
             }
             else
             {
-                var clip = new Rectangle(0, ViewportTop, Width, ViewportHeight);
+                // Rows stop short of the scroll bar so right-aligned content is never under it.
+                int rowWidth = Math.Max(0, Width - ScrollBarSpace);
+                var clip = new Rectangle(0, ViewportTop, rowWidth, ViewportHeight);
                 var saved = g.Clip;
                 g.SetClip(clip);
 
@@ -212,7 +278,7 @@ namespace GitClient.Controls
                         if (i == _hotRow) state |= RowState.Hot;
                         if (IsSelected(i)) state |= RowState.Selected;
                         if (Focused) state |= RowState.Focused;
-                        PaintRow(g, i, new Rectangle(0, y, Width, h), state);
+                        PaintRow(g, i, new Rectangle(0, y, rowWidth, h), state);
                     }
                     y += h;
                     if (y >= Height) break;
@@ -225,29 +291,8 @@ namespace GitClient.Controls
             // (TextRenderer), which ignores the clip region above, so a row scrolled halfway under
             // the header would otherwise write its text across the column titles.
             if (HeaderHeight > 0) PaintHeader(g, new Rectangle(0, 0, Width, HeaderHeight));
-            PaintScrollThumb(g);
-        }
 
-        private void PaintScrollThumb(Graphics g)
-        {
-            var thumb = ThumbBounds();
-            if (thumb.IsEmpty) return;
-            Draw.FillRounded(g, thumb, ThumbWidth / 2f,
-                _thumbHot || _draggingThumb ? P.Foreground3 : P.Fill2On(RowSurface));
-        }
-
-        private Rectangle ThumbBounds()
-        {
-            int total = TotalHeight;
-            int viewport = ViewportHeight;
-            if (total <= viewport || viewport <= 0) return Rectangle.Empty;
-            int trackTop = ViewportTop + ThumbTopMargin;
-            int trackHeight = viewport - ThumbTopMargin * 2;
-            if (trackHeight <= MinThumbHeight) return Rectangle.Empty;
-            int height = Math.Max(MinThumbHeight, (int)((long)trackHeight * viewport / total));
-            int travel = trackHeight - height;
-            int offset = MaxScroll <= 0 ? 0 : (int)((long)travel * _scroll / MaxScroll);
-            return new Rectangle(Width - ThumbInset - ThumbWidth, trackTop + offset, ThumbWidth, height);
+            SurfacePanel.PaintRoundedParentCorners(g, this);
         }
 
         // ------------------------------------------------------------------ input
@@ -266,13 +311,6 @@ namespace GitClient.Controls
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            if (_draggingThumb)
-            {
-                DragThumbTo(e.Y);
-                return;
-            }
-            bool overThumb = ThumbBounds().Contains(e.Location);
-            if (overThumb != _thumbHot) { _thumbHot = overThumb; Invalidate(); }
             UpdateHot(e.Location);
         }
 
@@ -287,10 +325,9 @@ namespace GitClient.Controls
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
-            if (_hotRow != -1 || _thumbHot)
+            if (_hotRow != -1)
             {
                 _hotRow = -1;
-                _thumbHot = false;
                 Invalidate();
             }
         }
@@ -299,16 +336,6 @@ namespace GitClient.Controls
         {
             base.OnMouseDown(e);
             Focus();
-
-            var thumb = ThumbBounds();
-            if (e.Button == MouseButtons.Left && !thumb.IsEmpty && thumb.Contains(e.Location))
-            {
-                _draggingThumb = true;
-                _dragOffset = e.Y - thumb.Y;
-                Capture = true;
-                Invalidate();
-                return;
-            }
 
             int index = RowIndexAt(e.Location);
             if (index < 0) return;
@@ -350,13 +377,6 @@ namespace GitClient.Controls
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
-            if (_draggingThumb)
-            {
-                _draggingThumb = false;
-                Capture = false;
-                Invalidate();
-                return;
-            }
             base.OnMouseUp(e);
             if (e.Button == MouseButtons.Right)
             {
@@ -370,20 +390,6 @@ namespace GitClient.Controls
             base.OnMouseDoubleClick(e);
             int index = RowIndexAt(e.Location);
             if (index >= 0) RowDoubleClick?.Invoke(this, new RowMouseEventArgs(index, e.Location, e.Button));
-        }
-
-        private void DragThumbTo(int mouseY)
-        {
-            int viewport = ViewportHeight;
-            int total = TotalHeight;
-            if (total <= viewport) return;
-            int trackTop = ViewportTop + ThumbTopMargin;
-            int trackHeight = viewport - ThumbTopMargin * 2;
-            var thumb = ThumbBounds();
-            int travel = trackHeight - thumb.Height;
-            if (travel <= 0) return;
-            int offset = mouseY - _dragOffset - trackTop;
-            ScrollOffset = (int)((long)Math.Max(0, Math.Min(travel, offset)) * MaxScroll / travel);
         }
 
         protected override bool IsInputKey(Keys keyData)
@@ -436,6 +442,27 @@ namespace GitClient.Controls
         {
             base.OnResize(e);
             ScrollOffset = _scroll;
+            SyncScrollBar();
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            ApplyScrollBarColors();
+            SyncScrollBar();
+        }
+
+        protected override void OnParentChanged(EventArgs e)
+        {
+            base.OnParentChanged(e);
+            ApplyScrollBarColors();
+        }
+
+        /// <summary>Rows changed, so the bar's range has to be recomputed.</summary>
+        protected void ContentChanged()
+        {
+            SyncScrollBar();
+            Invalidate();
         }
 
         protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
@@ -448,6 +475,7 @@ namespace GitClient.Controls
             if (selectedIndex >= 0 && selectedIndex < RowCount) _selected.Add(selectedIndex);
             _anchor = selectedIndex;
             _scroll = Math.Max(0, Math.Min(scroll, MaxScroll));
+            SyncScrollBar();
         }
 
         protected override void Dispose(bool disposing)

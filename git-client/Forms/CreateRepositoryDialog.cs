@@ -22,6 +22,8 @@ namespace GitClient.Forms
         private List<GitHubOwner> _owners = new List<GitHubOwner>();
         private GitHubOwner _owner;
         private bool _working;
+        private readonly Dictionary<string, System.Drawing.Image> _avatars =
+            new Dictionary<string, System.Drawing.Image>(StringComparer.Ordinal);
         private readonly string _suggestedName;
 
         public CreateRepositoryDialog(GitRepository repository, string suggestedName, string remoteName = "origin")
@@ -75,6 +77,10 @@ namespace GitClient.Forms
                 accountLabel.Text = "Signed in as " + _owner?.Login + " · " + token.Source;
                 statusLabel.Text = string.Empty;
                 if (manualToken != null) await GitHubAuth.StoreAsync(_owner?.Login, manualToken);
+
+                await LoadAvatarsAsync();
+                ownerButton.IconImage = AvatarFor(_owner);
+                if (manualToken != null) await OfferToPinAccountAsync(_owner?.Login);
             }
             catch (GitHubException ex)
             {
@@ -133,11 +139,64 @@ namespace GitClient.Forms
             {
                 var captured = owner;
                 var item = ownerMenu.Items.Add(owner.Login + (owner.IsOrganization ? "  (organisation)" : string.Empty));
-                item.Checkable = true;
-                item.Checked = _owner != null && string.Equals(_owner.Login, owner.Login, StringComparison.Ordinal);
-                item.Click += (s, a) => { _owner = captured; ownerButton.Text = captured.Login; UpdateCreateButton(); };
+                // The account's picture, so the list reads the way GitHub's own account switcher does.
+                item.Icon = AvatarFor(owner);
+                item.Checkable = item.Icon == null;
+                item.Checked = item.Icon == null && _owner != null && string.Equals(_owner.Login, owner.Login, StringComparison.Ordinal);
+                item.Click += (s, a) =>
+                {
+                    _owner = captured;
+                    ownerButton.Text = captured.Login;
+                    ownerButton.IconImage = AvatarFor(captured);
+                    UpdateCreateButton();
+                };
             }
             ownerMenu.Show(ownerButton, ownerButton.PointToScreen(new System.Drawing.Point(0, ownerButton.Height + 2)));
+        }
+
+        private System.Drawing.Image AvatarFor(GitHubOwner owner)
+        {
+            System.Drawing.Image image;
+            return owner != null && _avatars.TryGetValue(owner.Login, out image) ? image : null;
+        }
+
+        private async Task LoadAvatarsAsync()
+        {
+            foreach (var owner in _owners)
+            {
+                if (_avatars.ContainsKey(owner.Login)) continue;
+                // 16 px matches both the menu's icon column and the button's icon size.
+                var image = await GitHubClient.GetAvatarAsync(owner.AvatarUrl, 16);
+                if (image != null) _avatars[owner.Login] = image;
+            }
+        }
+
+        /// <summary>
+        /// Offers to name this account in the git config. Git Credential Manager shows its account
+        /// picker on every push while more than one GitHub sign-in is stored and none is pinned.
+        /// </summary>
+        private async Task OfferToPinAccountAsync(string login)
+        {
+            if (string.IsNullOrEmpty(login)) return;
+            var current = await GitHubAuth.GetPreferredAccountAsync();
+            if (string.Equals(current, login, StringComparison.OrdinalIgnoreCase)) return;
+
+            if (!Dialogs.Confirm(this, "GitHub account",
+                "Always use " + login + " for github.com?"
+                + Environment.NewLine + Environment.NewLine +
+                "GitHub asks which account to use on every push while more than one sign-in is stored. "
+                + "This answers it once by setting " + GitHubAuth.AccountConfigKey + " in your global git config.",
+                "Use this account")) return;
+
+            try
+            {
+                await GitHubAuth.SetPreferredAccountAsync(login);
+                statusLabel.Text = "git will use " + login + " for github.com from now on.";
+            }
+            catch (Exception ex)
+            {
+                statusLabel.Text = "Could not write the git config: " + ex.Message;
+            }
         }
 
         private void field_TextChanged(object sender, EventArgs e) => UpdateCreateButton();

@@ -40,6 +40,7 @@ namespace GitClient.Controls
     {
         private ButtonAppearance _appearance = ButtonAppearance.Subtle;
         private string _iconSvg;
+        private Image _iconImage;
         private int _iconSize = 16;
         private TextRole _iconRole = TextRole.Secondary;
         private float _textSizePx = 13f;
@@ -85,6 +86,14 @@ namespace GitClient.Controls
         {
             get => _iconSvg;
             set { _iconSvg = value; Invalidate(); }
+        }
+
+        /// <summary>A bitmap shown in place of <see cref="IconSvg"/> - an avatar, for instance.</summary>
+        [Category("Appearance"), DefaultValue(null)]
+        public Image IconImage
+        {
+            get => _iconImage;
+            set { _iconImage = value; Invalidate(); }
         }
 
         [Category("Appearance"), DefaultValue(16)]
@@ -179,7 +188,7 @@ namespace GitClient.Controls
             get
             {
                 int width = _paddingX * 2;
-                bool hasIcon = !string.IsNullOrEmpty(_iconSvg);
+                bool hasIcon = _iconImage != null || !string.IsNullOrEmpty(_iconSvg);
                 bool hasText = !string.IsNullOrEmpty(Text);
                 if (hasIcon) width += _iconSize;
                 if (hasIcon && hasText) width += _gap;
@@ -258,7 +267,16 @@ namespace GitClient.Controls
             int contentRight = chevronArea.IsEmpty ? Width - _paddingX : chevronArea.X - _paddingX / 2;
             int x = _paddingX;
 
-            if (!string.IsNullOrEmpty(_iconSvg))
+            if (_iconImage != null)
+            {
+                var old = g.InterpolationMode;
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawImage(_iconImage, new Rectangle(x, (Height - _iconSize) / 2, _iconSize, _iconSize));
+                g.InterpolationMode = old;
+                x += _iconSize;
+                if (!string.IsNullOrEmpty(Text)) x += _gap;
+            }
+            else if (!string.IsNullOrEmpty(_iconSvg))
             {
                 IconCache.DrawLeft(g, _iconSvg, _iconSize, iconColor, new Rectangle(x, 0, _iconSize, Height));
                 x += _iconSize;

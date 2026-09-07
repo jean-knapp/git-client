@@ -982,6 +982,48 @@ namespace GitClient.Views
             return await _repository.GetRemotesAsync();
         }
 
+        private void githubAccountItem_Click(object sender, EventArgs e) => ChooseGitHubAccountCommand();
+
+        /// <summary>
+        /// Names the GitHub account git should use. Git Credential Manager pops its "Select an
+        /// account" window on every push while more than one sign-in is stored and none is pinned.
+        /// </summary>
+        private async void ChooseGitHubAccountCommand()
+        {
+            string current;
+            try
+            {
+                current = await GitHubAuth.GetPreferredAccountAsync();
+            }
+            catch (Exception ex)
+            {
+                Dialogs.Error(this, "GitHub account", ex.Message);
+                return;
+            }
+
+            using (var prompt = new TextInputDialog())
+            {
+                prompt.Caption = "GitHub account";
+                prompt.Prompt = "Account to use for github.com (empty to let GitHub ask)";
+                prompt.Value = current ?? string.Empty;
+                prompt.AllowEmpty = true;
+                if (prompt.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+                var login = prompt.Value.Trim();
+                try
+                {
+                    await GitHubAuth.SetPreferredAccountAsync(login);
+                    statusMessageLabel.Text = login.Length == 0
+                        ? "github.com will ask which account to use again."
+                        : "git will use " + login + " for github.com.";
+                }
+                catch (Exception ex)
+                {
+                    Dialogs.Error(this, "GitHub account", "Could not write the git config:" + Environment.NewLine + ex.Message);
+                }
+            }
+        }
+
         private void remotesItem_Click(object sender, EventArgs e) => ShowRemotesCommand();
 
         private async void ShowRemotesCommand() => await ShowRemoteDialogAsync();

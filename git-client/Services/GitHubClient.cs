@@ -12,14 +12,18 @@ namespace GitClient.Services
     /// <summary>An account or organisation a repository can be created under.</summary>
     public sealed class GitHubOwner
     {
-        public GitHubOwner(string login, bool isOrganization)
+        public GitHubOwner(string login, bool isOrganization, string avatarUrl)
         {
             Login = login;
             IsOrganization = isOrganization;
+            AvatarUrl = avatarUrl;
         }
 
         public string Login { get; }
         public bool IsOrganization { get; }
+
+        /// <summary>Where the account's picture lives; null when GitHub did not report one.</summary>
+        public string AvatarUrl { get; }
 
         public override string ToString() => Login;
     }
@@ -62,7 +66,7 @@ namespace GitClient.Services
             var json = await GetAsync(token, "/user").ConfigureAwait(false);
             var login = Text(json, "login");
             if (string.IsNullOrEmpty(login)) throw new GitHubException(HttpStatusCode.OK, "GitHub did not return an account for this token.");
-            return new GitHubOwner(login, false);
+            return new GitHubOwner(login, false, Text(json, "avatar_url"));
         }
 
         /// <summary>The signed-in account first, then every organisation it belongs to.</summary>
@@ -77,7 +81,7 @@ namespace GitClient.Services
                     foreach (var entry in organizations)
                     {
                         var login = Text(entry, "login");
-                        if (!string.IsNullOrEmpty(login)) owners.Add(new GitHubOwner(login, true));
+                        if (!string.IsNullOrEmpty(login)) owners.Add(new GitHubOwner(login, true, Text(entry, "avatar_url")));
                     }
                 }
             }
@@ -110,6 +114,50 @@ namespace GitClient.Services
                 HtmlUrl = Text(json, "html_url"),
                 DefaultBranch = Text(json, "default_branch"),
             };
+        }
+
+        /// <summary>
+        /// Downloads an account's picture and returns it as a circle, ready to sit next to a name
+        /// in a menu. Returns null when there is no picture or it cannot be fetched.
+        /// </summary>
+        public static async Task<System.Drawing.Image> GetAvatarAsync(string avatarUrl, int size)
+        {
+            if (string.IsNullOrEmpty(avatarUrl)) return null;
+            try
+            {
+                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+                var url = avatarUrl + (avatarUrl.IndexOf('?') >= 0 ? "&" : "?") + "s=" + (size * 2);
+                using (var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
+                {
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd("GitClient");
+                    var bytes = await client.GetByteArrayAsync(url).ConfigureAwait(false);
+                    using (var stream = new System.IO.MemoryStream(bytes))
+                    using (var source = System.Drawing.Image.FromStream(stream))
+                    {
+                        return Circle(source, size);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        private static System.Drawing.Image Circle(System.Drawing.Image source, int size)
+        {
+            var target = new System.Drawing.Bitmap(size, size);
+            using (var g = System.Drawing.Graphics.FromImage(target))
+            using (var path = new System.Drawing.Drawing2D.GraphicsPath())
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                path.AddEllipse(0, 0, size, size);
+                g.SetClip(path);
+                g.DrawImage(source, 0, 0, size, size);
+            }
+            return target;
         }
 
         // ------------------------------------------------------------------ transport
