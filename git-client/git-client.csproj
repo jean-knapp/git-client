@@ -83,6 +83,9 @@
     <Compile Include="Controls\SegmentedControl.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\ScrollCornerControl.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Controls\SurfacePanel.cs">
       <SubType>Component</SubType>
     </Compile>

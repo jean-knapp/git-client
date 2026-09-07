@@ -45,6 +45,7 @@ namespace GitClient.Controls
         private int _scrollX;
         private readonly ModernScrollBar _vScroll;
         private readonly ModernScrollBar _hScroll;
+        private readonly ScrollCornerControl _scrollCorner;
         private bool _syncingBars;
         private int _maxColumns;
         private float _fontSizePx = 12.5f;
@@ -61,6 +62,8 @@ namespace GitClient.Controls
             _hScroll = new ModernScrollBar { Orientation = Orientation.Horizontal, Visible = false, TabStop = false, Height = ScrollBarWidth };
             _vScroll.Scroll += (s, e) => { if (!_syncingBars) { _scrollY = e.NewValue; SyncScrollBars(); Invalidate(); } };
             _hScroll.Scroll += (s, e) => { if (!_syncingBars) { _scrollX = e.NewValue; SyncScrollBars(); Invalidate(); } };
+            _scrollCorner = new ScrollCornerControl { Visible = false };
+            Controls.Add(_scrollCorner);
             Controls.Add(_vScroll);
             Controls.Add(_hScroll);
             ApplyScrollBarColors();
@@ -354,6 +357,7 @@ namespace GitClient.Controls
                 bar.ScrollBarColors.ThumbHoverColor = p.Foreground3;
                 bar.BackColor = Surface;
             }
+            if (_scrollCorner != null) _scrollCorner.Surface = Surface;
         }
 
         /// <summary>Puts the two bars where the content needs them and matches their ranges.</summary>
@@ -369,10 +373,20 @@ namespace GitClient.Controls
                 _vScroll.Visible = vertical;
                 _hScroll.Visible = horizontal;
 
-                int bottomInset = SurfacePanel.RoundedParentBottomInset(this);
+                // Both bars run the full extent; where they meet - or where a lone bar would run
+                // into the card's rounded corner - the square closes the gap.
+                bool corner = (vertical && horizontal) || ((vertical || horizontal) && SurfacePanel.RoundedParentBottomInset(this) > 0);
+                int reserved = corner ? ScrollBarWidth : 0;
+
+                if (_scrollCorner != null)
+                {
+                    _scrollCorner.Visible = corner;
+                    if (corner) _scrollCorner.SetBounds(Width - ScrollBarWidth, Height - ScrollBarWidth, ScrollBarWidth, ScrollBarWidth);
+                }
+
                 if (vertical)
                 {
-                    int height = Math.Max(0, Height - (horizontal ? ScrollBarWidth : 0) - bottomInset);
+                    int height = Math.Max(0, Height - reserved);
                     _vScroll.SetBounds(Width - ScrollBarWidth, 0, ScrollBarWidth, height);
                     _vScroll.Minimum = 0;
                     _vScroll.Maximum = Math.Max(0, MaxScrollY + height);
@@ -382,8 +396,8 @@ namespace GitClient.Controls
                 }
                 if (horizontal)
                 {
-                    int width = Math.Max(0, Width - (vertical ? ScrollBarWidth : 0) - bottomInset);
-                    _hScroll.SetBounds(bottomInset > 0 ? bottomInset : 0, Height - ScrollBarWidth - (bottomInset > 0 ? 1 : 0), width, ScrollBarWidth);
+                    int width = Math.Max(0, Width - reserved);
+                    _hScroll.SetBounds(0, Height - ScrollBarWidth, width, ScrollBarWidth);
                     _hScroll.Minimum = 0;
                     _hScroll.Maximum = Math.Max(0, MaxScrollX + width);
                     _hScroll.LargeChange = width;

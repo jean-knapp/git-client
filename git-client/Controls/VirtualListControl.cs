@@ -30,6 +30,7 @@ namespace GitClient.Controls
         protected const int ScrollBarWidth = 12;
 
         private readonly ModernScrollBar _scrollBar;
+        private readonly ScrollCornerControl _scrollCorner;
         private int _scroll;
         private int _hotRow = -1;
         private readonly List<int> _selected = new List<int>();
@@ -61,6 +62,8 @@ namespace GitClient.Controls
                 if (_syncingScrollBar) return;
                 ScrollOffset = e.NewValue;
             };
+            _scrollCorner = new ScrollCornerControl { Visible = false };
+            Controls.Add(_scrollCorner);
             Controls.Add(_scrollBar);
 
             Theme.Changed += OnThemeChanged;
@@ -81,6 +84,7 @@ namespace GitClient.Controls
             _scrollBar.ScrollBarColors.ThumbColor = P.Fill2On(RowSurface);
             _scrollBar.ScrollBarColors.ThumbHoverColor = P.Foreground3;
             _scrollBar.BackColor = RowSurface;
+            if (_scrollCorner != null) _scrollCorner.Surface = RowSurface;
         }
 
         /// <summary>Keeps the bar's range, position and visibility in step with the content.</summary>
@@ -95,11 +99,19 @@ namespace GitClient.Controls
             try
             {
                 if (_scrollBar.Visible != needed) _scrollBar.Visible = needed;
+                if (_scrollCorner != null && _scrollCorner.Visible != needed) _scrollCorner.Visible = needed;
                 if (!needed) return;
 
-                // Stop short of a rounded card's corner, which this control has to paint itself.
-                int bottomInset = SurfacePanel.RoundedParentBottomInset(this);
-                _scrollBar.SetBounds(Width - ScrollBarWidth, ViewportTop, ScrollBarWidth, Math.Max(0, viewport - bottomInset));
+                // The bar runs to the bottom except for the corner square, which closes the strip
+                // and keeps a rounded card's arc from being squared off by the bar's own window.
+                bool corner = SurfacePanel.RoundedParentBottomInset(this) > 0;
+                int reserved = corner ? ScrollBarWidth : 0;
+                _scrollBar.SetBounds(Width - ScrollBarWidth, ViewportTop, ScrollBarWidth, Math.Max(0, viewport - reserved));
+                if (_scrollCorner != null)
+                {
+                    _scrollCorner.Visible = corner;
+                    _scrollCorner.SetBounds(Width - ScrollBarWidth, Height - ScrollBarWidth, ScrollBarWidth, ScrollBarWidth);
+                }
                 _scrollBar.Minimum = 0;
                 _scrollBar.Maximum = Math.Max(0, total);
                 _scrollBar.LargeChange = viewport;
