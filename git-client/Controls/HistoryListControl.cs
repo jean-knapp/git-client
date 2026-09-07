@@ -407,8 +407,10 @@ namespace GitClient.Controls
             int messageLeft = CommitLeft;
             if (commit.Refs.Count > 0 && _filter.Length == 0)
             {
+                // Pills may run past the graph column and push the message right; cutting them off
+                // at the column edge is what used to hide "this is on the remote too".
                 int pillX = PillStart;
-                int limit = CommitLeft - 6;
+                int limit = Math.Max(CommitLeft, (AuthorLeft > CommitLeft + 60 ? AuthorLeft : TrackRight) - 160);
                 foreach (var pill in BuildPills(row))
                 {
                     int width = PillWidth(pill);
@@ -416,6 +418,7 @@ namespace GitClient.Controls
                     PaintPill(g, pill, new Rectangle(pillX, centerY - 10, width, 20), surface);
                     pillX += width + 5;
                 }
+                messageLeft = Math.Max(messageLeft, pillX + 4);
             }
 
             var messageFont = Fonts.Ui(14f, isHead);
@@ -448,6 +451,12 @@ namespace GitClient.Controls
             public bool IsRemote;
             public bool IsTag;
             public bool IsHead;
+
+            /// <summary>A local branch whose remote is on this very commit: pushed, nothing pending.</summary>
+            public bool OnRemoteToo;
+
+            /// <summary>Remotes carrying this branch, when there is more than the tracked one.</summary>
+            public string RemoteNames;
         }
 
         private List<RefPill> BuildPills(GraphRow row)
@@ -464,7 +473,19 @@ namespace GitClient.Controls
             foreach (var local in refs.Where(r => r.Kind == RefKind.LocalBranch)
                                       .OrderByDescending(r => r.IsHead).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase))
             {
-                pills.Add(new RefPill { Primary = local, Text = local.Name, IsLocal = true, IsHead = local.IsHead });
+                var pill = new RefPill { Primary = local, Text = local.Name, IsLocal = true, IsHead = local.IsHead };
+
+                // A remote-tracking ref on the same commit means the branch is pushed. Fold it into
+                // the branch's own pill - two pills side by side read as two different places.
+                var onRemote = refs.Where(r => r.Kind == RefKind.RemoteBranch && IsSameBranch(r.Name, local.Name)).ToList();
+                if (onRemote.Count > 0)
+                {
+                    pill.OnRemoteToo = true;
+                    pill.RemoteNames = string.Join(", ", onRemote.Select(r => r.Name));
+                    foreach (var r in onRemote) consumed.Add(r);
+                }
+
+                pills.Add(pill);
                 consumed.Add(local);
             }
             foreach (var remote in refs.Where(r => r.Kind == RefKind.RemoteBranch && !consumed.Contains(r))
@@ -479,11 +500,20 @@ namespace GitClient.Controls
             return pills;
         }
 
+        /// <summary>Does "origin/main" name the same branch as the local "main"?</summary>
+        private static bool IsSameBranch(string remoteName, string localName)
+        {
+            if (remoteName == null || localName == null) return false;
+            int slash = remoteName.IndexOf('/');
+            return slash > 0 && string.Equals(remoteName.Substring(slash + 1), localName, StringComparison.Ordinal);
+        }
+
         private int PillWidth(RefPill pill)
         {
             int width = 8 + Draw.MeasureWidth(pill.Text, Fonts.Ui(11.5f, true)) + 8;
             if (pill.IsLocal) width += 11 + 5;
-            return Math.Min(190, width);
+            if (pill.OnRemoteToo) width += 5 + 11;
+            return Math.Min(220, width);
         }
 
         private void PaintPill(Graphics g, RefPill pill, Rectangle bounds, Color surface)
@@ -520,7 +550,13 @@ namespace GitClient.Controls
                 IconCache.DrawLeft(g, Icons.Laptop, 11, fore, new Rectangle(x, bounds.Y, 11, bounds.Height));
                 x += 11 + 5;
             }
-            Draw.Text(g, pill.Text, Fonts.Ui(11.5f, true), new Rectangle(x, bounds.Y, bounds.Right - 8 - x, bounds.Height), fore, Draw.LeftMiddle);
+            int textRight = bounds.Right - 8 - (pill.OnRemoteToo ? 11 + 5 : 0);
+            Draw.Text(g, pill.Text, Fonts.Ui(11.5f, true), new Rectangle(x, bounds.Y, Math.Max(0, textRight - x), bounds.Height), fore, Draw.LeftMiddle);
+            if (pill.OnRemoteToo)
+            {
+                // The cloud says the same commit is on the remote, so nothing is waiting to be pushed.
+                IconCache.DrawLeft(g, Icons.Cloud, 11, fore, new Rectangle(textRight + 5, bounds.Y, 11, bounds.Height));
+            }
         }
 
         /// <summary>Ref pill under a client point, or null.</summary>

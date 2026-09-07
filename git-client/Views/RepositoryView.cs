@@ -493,6 +493,7 @@ namespace GitClient.Views
                 upstream.Append(_status.Upstream);
                 if (_status.Ahead > 0) upstream.Append(" · ahead ").Append(_status.Ahead);
                 if (_status.Behind > 0) upstream.Append(" · behind ").Append(_status.Behind);
+                if (_status.Ahead == 0 && _status.Behind == 0) upstream.Append(" · in sync");
             }
             else if (!_status.IsDetached && _status.Branch != null) upstream.Append("no upstream");
             statusUpstreamLabel.Text = upstream.ToString();
