@@ -36,6 +36,7 @@ namespace GitClient.Views
         private DateTime _lastRefresh;
         private DateTime? _lastFetch;
         private bool _amendMessageLoaded;
+        private bool _askedAboutGitHubAccount;
         private bool _allBranches = true;
         private ModernContextMenu _dynamicMenu;
         private CancellationTokenSource _aiCancellation;
@@ -802,7 +803,13 @@ namespace GitClient.Views
 
         private async void fetchButton_Click(object sender, EventArgs e) => await FetchCommandAsync();
 
-        public async Task FetchCommandAsync() => await ExecuteAsync("Fetching...", async () =>
+        public async Task FetchCommandAsync()
+        {
+            await EnsureGitHubAccountAsync(null);
+            await FetchAsync();
+        }
+
+        private async Task FetchAsync() => await ExecuteAsync("Fetching...", async () =>
         {
             var result = await WithCredentialRetryAsync("Fetch",
                 () => _repository.FetchAsync(CreateProgress(), CancellationToken.None));
@@ -819,6 +826,7 @@ namespace GitClient.Views
 
         private async Task PullAsync(PullMode mode)
         {
+            await EnsureGitHubAccountAsync(null);
             if (!_status.IsDetached && _status.Upstream == null && !await TrySetUpstreamAsync("Pull")) return;
             await ExecuteAsync("Pulling...", async () =>
             {
@@ -850,6 +858,8 @@ namespace GitClient.Views
                 Dialogs.Warning(this, "Push", "HEAD is detached. Check out a branch before pushing.");
                 return;
             }
+            await EnsureGitHubAccountAsync(null);
+
             bool needsUpstream = setUpstream || _status.Upstream == null;
             string remote = null;
             if (needsUpstream)
@@ -981,6 +991,79 @@ namespace GitClient.Views
             await RefreshAsync();
             if (push && pushWhenAsked && !_status.IsDetached) await PushAsync(true, false);
             return await _repository.GetRemotesAsync();
+        }
+
+        /// <summary>
+        /// Git Credential Manager stops on every push with "Select an account" when Windows holds
+        /// more than one sign-in for the host and nothing says which to use. Offer to answer that
+        /// once, before the operation runs, so the window stops appearing.
+        /// </summary>
+        private async Task EnsureGitHubAccountAsync(string remote)
+        {
+            if (_askedAboutGitHubAccount || _repository == null) return;
+
+            string url;
+            try
+            {
+                url = await _repository.GetRemoteUrlAsync(remote ?? "origin");
+            }
+            catch (Exception)
+            {
+                return;
+            }
+            if (url == null || url.IndexOf(GitHubAuth.Host, StringComparison.OrdinalIgnoreCase) < 0) return;
+            if (url.IndexOf("@" + GitHubAuth.Host, StringComparison.OrdinalIgnoreCase) >= 0) return;  // the URL names it
+
+            try
+            {
+                if (!string.IsNullOrEmpty(await GitHubAuth.GetPreferredAccountAsync())) return;
+            }
+            catch (Exception)
+            {
+                return;
+            }
+
+            var stored = WindowsCredentials.AccountsFor(GitHubAuth.Host);
+            if (stored.Count < 2) return;   // with one sign-in there is nothing to choose between
+            _askedAboutGitHubAccount = true;
+
+            var logins = stored.Select(a => a.User)
+                               .Where(u => !string.IsNullOrWhiteSpace(u))
+                               .Distinct(StringComparer.OrdinalIgnoreCase)
+                               .ToList();
+
+            string login;
+            if (logins.Count == 1)
+            {
+                login = logins[0];
+                if (!Dialogs.Confirm(this, "GitHub account",
+                    "Windows has " + stored.Count + " GitHub sign-ins stored, all for " + login + ", so GitHub asks which one to use every time."
+                    + Environment.NewLine + Environment.NewLine +
+                    "Always use " + login + "? This sets " + GitHubAuth.AccountConfigKey + " in your global git config, and the window stops appearing.",
+                    "Use " + login)) return;
+            }
+            else
+            {
+                using (var prompt = new TextInputDialog())
+                {
+                    prompt.Caption = "GitHub account";
+                    prompt.Prompt = "Account to use for github.com (" + string.Join(", ", logins) + ")";
+                    prompt.Value = logins.Count > 0 ? logins[0] : string.Empty;
+                    if (prompt.ShowDialog(FindForm()) != DialogResult.OK) return;
+                    login = prompt.Value.Trim();
+                    if (login.Length == 0) return;
+                }
+            }
+
+            try
+            {
+                await GitHubAuth.SetPreferredAccountAsync(login);
+                statusMessageLabel.Text = "git will use " + login + " for github.com.";
+            }
+            catch (Exception ex)
+            {
+                Dialogs.Error(this, "GitHub account", "Could not write the git config:" + Environment.NewLine + ex.Message);
+            }
         }
 
         private void githubAccountItem_Click(object sender, EventArgs e) => ChooseGitHubAccountCommand();

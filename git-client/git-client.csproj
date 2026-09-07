@@ -168,6 +168,7 @@
     <Compile Include="Services\GitIgnoreTemplates.cs" />
     <Compile Include="Services\GitHubAuth.cs" />
     <Compile Include="Services\GitHubClient.cs" />
+    <Compile Include="Services\WindowsCredentials.cs" />
     <Compile Include="Services\Theme.cs" />
     <Compile Include="Views\RepositoryView.cs">
       <SubType>UserControl</SubType>
