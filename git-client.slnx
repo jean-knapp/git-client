@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="git-client/git-client.csproj" Id="bcd05dbc-5f75-419c-b07f-f10a9ea0f3b7" />
+  <Project Path="../ModdingTool/ModernWinForms/ModernWinForms/ModernWinForms.csproj" Id="6c232cb9-5002-48b0-918a-15d05e4a7889" />
+</Solution>
