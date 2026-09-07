@@ -180,10 +180,15 @@ namespace GitClient.Controls
             return true;
         }
 
+        /// <summary>
+        /// Selects the working-tree row, or the newest commit when the working tree is clean and
+        /// there is no such row.
+        /// </summary>
         public void SelectWorkInProgress()
         {
+            if (_rows.Count == 0) return;
             int index = _rows.FindIndex(r => r.IsWorkInProgress);
-            if (index < 0) return;
+            if (index < 0) index = 0;
             SetSelection(index, true);
             EnsureVisible(index);
         }

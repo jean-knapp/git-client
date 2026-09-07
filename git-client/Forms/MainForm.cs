@@ -74,12 +74,26 @@ namespace GitClient.Forms
         {
             base.OnLoad(e);
             RestoreWindowPosition();
-            RefreshWelcome();
 
+            // Opening the saved repositories is asynchronous, so the welcome screen has to be out
+            // of the way before the first paint or it flashes up and is replaced a moment later.
             var settings = AppSettings.Current;
-            foreach (var path in settings.OpenRepositories.ToList())
+            var restoring = settings.OpenRepositories.Where(Directory.Exists).ToList();
+            welcomeView.Visible = restoring.Count == 0;
+            if (restoring.Count == 0) RefreshWelcome();
+
+            // The tab that was active last time loads first: it is the one being waited for.
+            int active = restoring.FindIndex(p => string.Equals(p, settings.ActiveRepository, StringComparison.OrdinalIgnoreCase));
+            if (active > 0)
             {
-                if (Directory.Exists(path)) await OpenRepositoryAsync(path, false);
+                var path = restoring[active];
+                restoring.RemoveAt(active);
+                restoring.Insert(0, path);
+            }
+
+            foreach (var path in restoring)
+            {
+                await OpenRepositoryAsync(path, false);
             }
             if (_views.Count > 0)
             {
@@ -172,6 +186,15 @@ namespace GitClient.Forms
 
             AppSettings.Current.AddRecent(root);
             RefreshTabs();
+
+            // Show the first tab before it has any data, so the window fills in instead of sitting
+            // blank (or on the welcome screen) until git answers.
+            if (_activeView == null)
+            {
+                tabStrip.SetSelectedIndexQuiet(_views.Count - 1);
+                ActivateView(_views.Count - 1);
+                UpdateHostVisibility();
+            }
 
             try
             {

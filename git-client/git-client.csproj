@@ -109,6 +109,12 @@
     <Compile Include="Forms\GitIgnoreDialog.Designer.cs">
       <DependentUpon>GitIgnoreDialog.cs</DependentUpon>
     </Compile>
+    <Compile Include="Forms\RemoteDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\RemoteDialog.Designer.cs">
+      <DependentUpon>RemoteDialog.cs</DependentUpon>
+    </Compile>
     <Compile Include="Forms\MainForm.cs">
       <SubType>Form</SubType>
     </Compile>

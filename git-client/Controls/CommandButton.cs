@@ -62,6 +62,10 @@ namespace GitClient.Controls
         public CommandButton()
         {
             SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.ResizeRedraw | ControlStyles.Selectable | ControlStyles.SupportsTransparentBackColor, true);
+            // Control raises Click from its own WM_LBUTTONUP handling, before OnMouseUp runs, so a
+            // click on the chevron half of a split button would fire the main action as well.
+            // Clicks are raised here instead.
+            SetStyle(ControlStyles.StandardClick | ControlStyles.StandardDoubleClick, false);
             TabStop = true;
             BackColor = Color.Transparent;
             Size = new Size(96, 32);
@@ -378,13 +382,16 @@ namespace GitClient.Controls
 
             if (_chevron == ChevronMode.Split && ChevronArea.Contains(e.Location))
             {
+                base.OnMouseUp(e);
                 ChevronClick?.Invoke(this, EventArgs.Empty);
                 ShowDropDown();
                 return;
             }
 
             base.OnMouseUp(e);
+            if (!Enabled) return;
             if (_chevron != ChevronMode.Split && _dropDownMenu != null) ShowDropDown();
+            else OnClick(EventArgs.Empty);
         }
 
         /// <summary>Opens the drop-down menu flush under the button.</summary>

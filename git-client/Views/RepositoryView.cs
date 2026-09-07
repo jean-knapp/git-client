@@ -331,7 +331,7 @@ namespace GitClient.Views
                 _unstagedStats = unstagedTask.Result;
 
                 AttachRefsToCommits();
-                _layout = GraphLayout.Build(_commits, _status.HeadSha, true);
+                _layout = GraphLayout.Build(_commits, _status.HeadSha, _status.HasChanges);
                 historyList.SetData(_layout, _status);
                 changesList.SetStatus(_status, _stagedStats, _unstagedStats);
 
@@ -558,7 +558,7 @@ namespace GitClient.Views
                 commitFilesList.SetFiles(working, stats,
                     working.Count + (working.Count == 1 ? " file changed" : " files changed"));
                 if (commitFilesList.SelectedChange == null) commitFilesList.SelectFirst();
-                else await ShowDiffForSelectionAsync();
+                await ShowDiffForSelectionAsync();
                 return;
             }
 
@@ -584,6 +584,7 @@ namespace GitClient.Views
                 if (historyList.SelectedRow != row) return;
                 commitFilesList.SetFiles(filesTask.Result, statsTask.Result);
                 commitFilesList.SelectFirst();
+                await ShowDiffForSelectionAsync();
             }
             catch (Exception ex)
             {
@@ -817,6 +818,7 @@ namespace GitClient.Views
 
         private async Task PullAsync(PullMode mode)
         {
+            if (!_status.IsDetached && _status.Upstream == null && !await TrySetUpstreamAsync("Pull")) return;
             await ExecuteAsync("Pulling...", async () =>
             {
                 var result = await WithCredentialRetryAsync("Pull",
@@ -854,8 +856,13 @@ namespace GitClient.Views
                 var remotes = await _repository.GetRemotesAsync();
                 if (remotes.Count == 0)
                 {
-                    Dialogs.Warning(this, "Push", "This repository has no remote. Add one with:\n\ngit remote add origin <url>");
-                    return;
+                    if (!Dialogs.Confirm(this, "Push",
+                        "This repository has no remote yet, so there is nowhere to push."
+                        + Environment.NewLine + Environment.NewLine +
+                        "Add one now? Paste the repository's GitHub URL and this branch will be published to it.",
+                        "Add a remote...")) return;
+                    remotes = await ShowRemoteDialogAsync();
+                    if (remotes.Count == 0) return;
                 }
                 remote = remotes.Contains("origin") ? "origin" : remotes[0];
             }
@@ -865,6 +872,70 @@ namespace GitClient.Views
                     () => _repository.PushAsync(remote, _status.Branch, needsUpstream, force, CreateProgress(), CancellationToken.None));
                 ReportResult(result, "Push", "Push finished.");
             });
+        }
+
+        /// <summary>
+        /// A branch with no upstream cannot pull. Offers to point it at the matching remote branch,
+        /// or to publish it, instead of passing git's "set-upstream" advice on to the user.
+        /// </summary>
+        private async Task<bool> TrySetUpstreamAsync(string title)
+        {
+            var branch = _status.Branch;
+            if (branch == null) return true;
+
+            var remotes = await _repository.GetRemotesAsync();
+            if (remotes.Count == 0)
+            {
+                if (!Dialogs.Confirm(this, title,
+                    "This repository has no remote yet, so there is nothing to pull from." + Environment.NewLine + Environment.NewLine + "Add one now?",
+                    "Add a remote...")) return false;
+                remotes = await ShowRemoteDialogAsync();
+                if (remotes.Count == 0) return false;
+            }
+
+            var remote = remotes.Contains("origin") ? "origin" : remotes[0];
+            var tracking = remote + "/" + branch;
+            bool onRemote = _refs.Any(r => r.Kind == RefKind.RemoteBranch && string.Equals(r.Name, tracking, StringComparison.Ordinal));
+
+            if (!onRemote)
+            {
+                if (!Dialogs.Confirm(this, title,
+                    "\"" + branch + "\" is not on " + remote + " yet, so there is nothing to pull." + Environment.NewLine + Environment.NewLine + "Publish it now? That pushes the branch and sets it to track " + tracking + ".",
+                    "Publish branch")) return false;
+                await PushAsync(true, false);
+                return false;
+            }
+
+            if (!Dialogs.Confirm(this, title,
+                "\"" + branch + "\" does not track a remote branch yet." + Environment.NewLine + Environment.NewLine + "Track " + tracking + " and continue?",
+                "Track and continue")) return false;
+
+            var result = await _repository.SetUpstreamAsync(branch, remote, branch);
+            if (!result.Succeeded)
+            {
+                Dialogs.Error(this, title, result.Message);
+                return false;
+            }
+            await RefreshAsync();
+            return true;
+        }
+
+        private void remotesItem_Click(object sender, EventArgs e) => ShowRemotesCommand();
+
+        private async void ShowRemotesCommand() => await ShowRemoteDialogAsync();
+
+        /// <summary>Opens the remote editor and reports the remotes that exist afterwards.</summary>
+        private async Task<List<string>> ShowRemoteDialogAsync()
+        {
+            if (_repository == null) return new List<string>();
+            bool changed;
+            using (var dialog = new RemoteDialog(_repository))
+            {
+                dialog.ShowDialog(FindForm());
+                changed = dialog.Changed;
+            }
+            if (changed) await RefreshAsync();
+            return await _repository.GetRemotesAsync();
         }
 
         private void newBranchButton_Click(object sender, EventArgs e) => CreateBranchCommand();

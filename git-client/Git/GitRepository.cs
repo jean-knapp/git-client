@@ -218,6 +218,47 @@ namespace GitClient.Git
             return result.StandardOutput.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
         }
 
+        /// <summary>Every remote with its fetch and push URLs.</summary>
+        public async Task<List<RemoteInfo>> GetRemoteListAsync()
+        {
+            var result = await RunAsync("remote", "-v").ConfigureAwait(false);
+            var list = new List<RemoteInfo>();
+            if (!result.Succeeded) return list;
+            foreach (var line in result.StandardOutput.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                // name<TAB>url (fetch|push)
+                var tab = line.IndexOf('\t');
+                if (tab <= 0) continue;
+                var name = line.Substring(0, tab).Trim();
+                var rest = line.Substring(tab + 1).Trim();
+                bool push = rest.EndsWith("(push)", StringComparison.Ordinal);
+                int space = rest.LastIndexOf(" (", StringComparison.Ordinal);
+                var url = space > 0 ? rest.Substring(0, space).Trim() : rest;
+
+                var remote = list.Find(r => string.Equals(r.Name, name, StringComparison.Ordinal));
+                if (remote == null)
+                {
+                    remote = new RemoteInfo { Name = name };
+                    list.Add(remote);
+                }
+                if (push) remote.PushUrl = url;
+                else remote.FetchUrl = url;
+            }
+            return list;
+        }
+
+        public Task<GitResult> AddRemoteAsync(string name, string url) => RunAsync("remote", "add", name, url);
+
+        public Task<GitResult> SetRemoteUrlAsync(string name, string url) => RunAsync("remote", "set-url", name, url);
+
+        public Task<GitResult> RenameRemoteAsync(string oldName, string newName) => RunAsync("remote", "rename", oldName, newName);
+
+        public Task<GitResult> RemoveRemoteAsync(string name) => RunAsync("remote", "remove", name);
+
+        /// <summary>Points a local branch at <c>&lt;remote&gt;/&lt;branch&gt;</c>.</summary>
+        public Task<GitResult> SetUpstreamAsync(string branch, string remote, string remoteBranch) =>
+            RunAsync("branch", "--set-upstream-to=" + remote + "/" + (remoteBranch ?? branch), branch);
+
         public async Task<string> GetRemoteUrlAsync(string remote)
         {
             var result = await RunAsync("remote", "get-url", remote).ConfigureAwait(false);

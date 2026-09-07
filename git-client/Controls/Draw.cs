@@ -151,13 +151,18 @@ namespace GitClient.Controls
         {
             if (color.A == 0) return;
             var old = g.SmoothingMode;
+            var offset = g.PixelOffsetMode;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            // Pixel centres at .5 keep a hairline on exactly one row of pixels; with the default
+            // mode a 1 px border straddles two rows and renders at about half its colour.
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             var r = new RectangleF(bounds.X + width / 2f, bounds.Y + width / 2f, bounds.Width - width, bounds.Height - width);
             using (var path = RoundedRect(r, radius))
             using (var pen = new Pen(color, width))
             {
                 g.DrawPath(pen, path);
             }
+            g.PixelOffsetMode = offset;
             g.SmoothingMode = old;
         }
 

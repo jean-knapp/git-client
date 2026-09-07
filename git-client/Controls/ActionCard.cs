@@ -90,7 +90,7 @@ namespace GitClient.Controls
             if (_pressed) face = p.Fill2On(p.Layer);
             else if (_hot) face = p.Mode == ThemeMode.Light ? p.HoverOn(p.Layer) : Color.FromArgb(0x2d, 0x2d, 0x2d);
 
-            Draw.Card(g, new Rectangle(0, 0, Width - 1, Height - 1), 8f, face, p.CardStrokeOn(parent));
+            Draw.Card(g, new Rectangle(0, 0, Width - 1, Height - 1), 8f, face, p.CardStrokeOn(face));
 
             int x = 20;
             var tile = new Rectangle(x, (Height - 40) / 2, 40, 40);

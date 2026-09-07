@@ -69,7 +69,9 @@ namespace GitClient.Services
             Fill = Argb(14, 255, 255, 255),      // rgba(255,255,255,.055)
             Fill2 = Argb(23, 255, 255, 255),     // rgba(255,255,255,.09)
             Stroke = Argb(23, 255, 255, 255),
-            CardStroke = Argb(18, 255, 255, 255),
+            // Composited over a card's own --layer this is #383838, the same hairline as the
+            // dividers inside the cards.
+            CardStroke = Argb(20, 255, 255, 255),
             Divider = Argb(20, 255, 255, 255),
             Hover = Argb(11, 255, 255, 255),
             Selection = Argb(33, 96, 205, 255),  // rgba(96,205,255,.13)
@@ -108,7 +110,7 @@ namespace GitClient.Services
             Fill = Argb(7, 0, 0, 0),             // rgba(0,0,0,.028)
             Fill2 = Argb(15, 0, 0, 0),           // rgba(0,0,0,.06)
             Stroke = Argb(28, 0, 0, 0),          // rgba(0,0,0,.11)
-            CardStroke = Argb(18, 0, 0, 0),
+            CardStroke = Argb(20, 0, 0, 0),
             Divider = Argb(20, 0, 0, 0),
             Hover = Argb(10, 0, 0, 0),
             Selection = Argb(23, 0, 95, 184),    // rgba(0,95,184,.09)

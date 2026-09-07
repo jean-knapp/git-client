@@ -36,7 +36,6 @@ namespace GitClient.Controls
         private const int TabGap = 4;
         private const int TabPaddingLeft = 12;
         private const int TabPaddingRight = 6;
-        private const int InactivePaddingRight = 12;
         private const int CloseSize = 20;
         private const int AddSize = 30;
 
@@ -101,8 +100,7 @@ namespace GitClient.Controls
             int width = TabPaddingLeft;
             width += Draw.MeasureWidth(tab.Title ?? string.Empty, Fonts.Ui(13f, active));
             if (!string.IsNullOrEmpty(tab.Branch)) width += 8 + Draw.MeasureWidth(tab.Branch, Fonts.Ui(12f));
-            bool showClose = active || index == _hotIndex;
-            width += showClose ? 8 + CloseSize + TabPaddingRight : InactivePaddingRight;
+            width += 8 + CloseSize + TabPaddingRight;
             return Math.Min(280, width);
         }
 
@@ -179,8 +177,7 @@ namespace GitClient.Controls
 
                 var tab = _tabs[i];
                 int x = bounds.X + TabPaddingLeft;
-                bool showClose = active || hot;
-                int right = bounds.Right - (showClose ? TabPaddingRight + CloseSize + 8 : InactivePaddingRight);
+                int right = bounds.Right - (TabPaddingRight + CloseSize + 8);
 
                 var titleFont = Fonts.Ui(13f, active);
                 var titleColor = active ? p.Foreground : p.Foreground2;
@@ -193,12 +190,11 @@ namespace GitClient.Controls
                     Draw.Text(g, tab.Branch, Fonts.Ui(12f), new Rectangle(x, bounds.Y, Math.Max(0, right - x), bounds.Height), p.Foreground3, Draw.LeftMiddle);
                 }
 
-                if (showClose)
-                {
-                    var close = CloseBounds(i);
-                    if (_hotClose && i == _hotIndex) Draw.FillRounded(g, close, 4f, p.Fill2On(surface));
-                    IconCache.DrawCentered(g, Icons.Cross, 9, p.Foreground3, close.X + close.Width / 2, close.Y + close.Height / 2);
-                }
+                var close = CloseBounds(i);
+                bool hotClose = _hotClose && i == _hotIndex;
+                if (hotClose) Draw.FillRounded(g, close, 4f, p.Fill2On(surface));
+                IconCache.DrawCentered(g, Icons.Cross, 9, hotClose ? p.Foreground : p.Foreground3,
+                    close.X + close.Width / 2, close.Y + close.Height / 2);
             }
 
             var add = AddBounds();
@@ -252,7 +248,7 @@ namespace GitClient.Controls
 
             int tab = TabIndexAt(e.Location);
             if (tab < 0) return;
-            if (CloseBounds(tab).Contains(e.Location) && (tab == _selectedIndex || tab == _hotIndex))
+            if (CloseBounds(tab).Contains(e.Location))
             {
                 TabCloseRequested?.Invoke(this, new TabEventArgs(tab));
                 return;

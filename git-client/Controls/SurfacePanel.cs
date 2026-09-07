@@ -130,6 +130,7 @@ namespace GitClient.Controls
         {
             ApplyBackColor();
             Invalidate();
+            if (Region != null) InvalidateBehind();
         }
 
         private void ApplyBackColor()
@@ -168,7 +169,7 @@ namespace GitClient.Controls
             bool rounded = _cornerRadius > 0 && (_surface == SurfaceKind.Card || _surface == SurfaceKind.Fill || _surface == SurfaceKind.Custom);
             if (!rounded)
             {
-                if (Region != null) { Region.Dispose(); Region = null; }
+                if (Region != null) { Region.Dispose(); Region = null; InvalidateBehind(); }
                 return;
             }
             if (Width <= 0 || Height <= 0) return;
@@ -179,6 +180,30 @@ namespace GitClient.Controls
                 Region = new Region(path);
             }
             previous?.Dispose();
+            InvalidateBehind();
+        }
+
+        /// <summary>
+        /// Repaints the parent under this panel. The corners cut away by the region are no longer
+        /// part of this window, so whoever is behind has to draw them - and nothing else asks it to.
+        /// </summary>
+        private void InvalidateBehind()
+        {
+            var parent = Parent;
+            if (parent == null || !parent.IsHandleCreated) return;
+            parent.Invalidate(new Rectangle(Left, Top, Width, Height), false);
+        }
+
+        protected override void OnLocationChanged(EventArgs e)
+        {
+            base.OnLocationChanged(e);
+            if (Region != null) InvalidateBehind();
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            if (Visible && Region != null) InvalidateBehind();
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -198,11 +223,11 @@ namespace GitClient.Controls
                 }
                 else if (_surface == SurfaceKind.Card)
                 {
-                    Draw.Card(g, new Rectangle(0, 0, Width - 1, Height - 1), _cornerRadius, fill, p.CardStrokeOn(ParentSurfaceColor()));
+                    Draw.Card(g, new Rectangle(0, 0, Width - 1, Height - 1), _cornerRadius, fill, p.CardStrokeOn(fill));
                 }
                 else if (_surface == SurfaceKind.Fill)
                 {
-                    Draw.Card(g, new Rectangle(0, 0, Width - 1, Height - 1), _cornerRadius, fill, p.StrokeOn(ParentSurfaceColor()));
+                    Draw.Card(g, new Rectangle(0, 0, Width - 1, Height - 1), _cornerRadius, fill, p.StrokeOn(fill));
                 }
                 else if (_surface == SurfaceKind.Custom)
                 {

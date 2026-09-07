@@ -187,6 +187,16 @@ namespace GitClient.Git
         Rebase,
     }
 
+    /// <summary>A configured remote and the URLs git fetches from and pushes to.</summary>
+    public sealed class RemoteInfo
+    {
+        public string Name { get; set; }
+        public string FetchUrl { get; set; }
+        public string PushUrl { get; set; }
+
+        public override string ToString() => Name;
+    }
+
     public sealed class StashInfo
     {
         public int Index { get; set; }
