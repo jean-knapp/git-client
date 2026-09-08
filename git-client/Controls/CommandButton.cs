@@ -408,8 +408,11 @@ namespace GitClient.Controls
 
             base.OnMouseUp(e);
             if (!Enabled) return;
+
+            // Click first, then the menu: a handler is what fills a menu whose items depend on the
+            // moment it opens, and ShowDropDown does nothing while the menu is empty.
+            OnClick(EventArgs.Empty);
             if (_chevron != ChevronMode.Split && _dropDownMenu != null) ShowDropDown();
-            else OnClick(EventArgs.Empty);
         }
 
         /// <summary>Opens the drop-down menu flush under the button.</summary>
@@ -443,8 +446,8 @@ namespace GitClient.Controls
         public void PerformClick()
         {
             if (!Enabled) return;
-            if (_chevron == ChevronMode.Split || _dropDownMenu == null) OnClick(EventArgs.Empty);
-            else ShowDropDown();
+            OnClick(EventArgs.Empty);
+            if (_chevron != ChevronMode.Split && _dropDownMenu != null) ShowDropDown();
         }
 
         protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
