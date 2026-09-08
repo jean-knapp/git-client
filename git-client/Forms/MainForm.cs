@@ -46,25 +46,36 @@ namespace GitClient.Forms
             Invalidate(true);
         }
 
-        /// <summary>Puts the branch glyph in the title bar, in the accent lane colour.</summary>
+        /// <summary>Gives the window the application icon, for its title bar and the task bar.</summary>
         private void ApplyTitleIcon()
         {
+            if (_titleIcon != null) return;   // the application icon does not change with the theme
             try
             {
+                // The .ico built into the executable, so the title bar, Alt+Tab and the task bar
+                // each pick the size they need.
+                using (var stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("GitClient.app.ico"))
+                {
+                    if (stream != null)
+                    {
+                        _titleIcon = new Icon(stream);
+                        Icon = _titleIcon;
+                        return;
+                    }
+                }
+
+                // Falls back to the branch glyph if the resource is ever missing.
                 var image = IconCache.Get(Icons.Branch, 16, Theme.Palette.Lane);
                 if (image == null) return;
                 using (var bitmap = new Bitmap(image))
                 {
-                    var handle = bitmap.GetHicon();
-                    var previous = _titleIcon;
-                    _titleIcon = Icon.FromHandle(handle);
+                    _titleIcon = Icon.FromHandle(bitmap.GetHicon());
                     Icon = _titleIcon;
-                    previous?.Dispose();
                 }
             }
             catch
             {
-                // The title bar simply keeps the default icon if the glyph cannot be rasterised.
+                // The title bar simply keeps the default icon if the icon cannot be loaded.
             }
         }
 

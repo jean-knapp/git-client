@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("git-client")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("Git Client")]
+[assembly: AssemblyDescription("A Git client for Windows: history graph, staging, diffs and GitHub.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("git-client")]
-[assembly: AssemblyCopyright("Copyright ©  2026")]
+[assembly: AssemblyProduct("Git Client")]
+[assembly: AssemblyCopyright("Copyright © 2026 Jean Knapp")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
