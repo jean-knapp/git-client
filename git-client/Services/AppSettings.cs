@@ -48,7 +48,17 @@ namespace GitClient.Services
         public int WindowHeight { get; set; } = 900;
         public bool WindowMaximized { get; set; }
 
+        /// <summary>Width of the changes and commit column.</summary>
         public int RightPanelWidth { get; set; } = 430;
+
+        /// <summary>Height of the details and diff card under the history.</summary>
+        public int DetailPanelHeight { get; set; } = 392;
+
+        /// <summary>Width of the changed-files list inside that card.</summary>
+        public int CommitFilesWidth { get; set; } = 321;
+
+        /// <summary>Height of the commit message card under the changes list.</summary>
+        public int CommitPanelHeight { get; set; } = 268;
         public bool ShowOutputPanel { get; set; }
 
         public void AddRecent(string path)

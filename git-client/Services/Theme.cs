@@ -310,7 +310,8 @@ namespace GitClient.Services
             s.ScrollBar.ThumbColor = fill2OnLayer;
             s.ScrollBar.ThumbHoverColor = p.Foreground3;
 
-            s.SplitContainer.Colors.SplitterColor = Color.Transparent;
+            // The track matches the body the cards sit on; the grip dots are derived from it.
+            s.SplitContainer.Colors.SplitterColor = p.Background;
             s.SplitContainer.Colors.PressedColor = p.Accent;
 
             s.ProgressBar.CornerStyle = CornerStyle.Round;

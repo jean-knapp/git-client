@@ -37,6 +37,8 @@ namespace GitClient.Views
         private DateTime? _lastFetch;
         private bool _amendMessageLoaded;
         private bool _askedAboutGitHubAccount;
+        private bool _restoringLayout;
+        private bool _layoutRestored;
         private bool _allBranches = true;
         private ModernContextMenu _dynamicMenu;
         private CancellationTokenSource _aiCancellation;
@@ -98,6 +100,15 @@ namespace GitClient.Views
             conflictBanner.CustomFill = Color.FromArgb(26, p.Warning);
             conflictBanner.CustomBorder = Color.FromArgb(71, p.Warning);
             conflictBanner.Invalidate();
+
+            // The splitters stand in for the gaps the design leaves between cards, so they and
+            // their panels paint the body surface rather than the default control colour.
+            foreach (var split in new[] { mainSplit, historySplit, detailSplit, rightSplit })
+            {
+                split.BackColor = p.Background;
+                split.Panel1.BackColor = p.Background;
+                split.Panel2.BackColor = p.Background;
+            }
         }
 
         private static void StyleFlatTextBox(ModernTextBox box, Color fill, float sizePx, bool monospace = false)
@@ -2070,12 +2081,62 @@ namespace GitClient.Views
         public void ApplyLayoutSettings(AppSettings settings)
         {
             if (settings.ShowOutputPanel && !outputPanel.Visible) ToggleOutputPanel();
+
+            _restoringLayout = true;
+            try
+            {
+                // Panel 2 holds the right column and the detail card, so their saved sizes are
+                // measured from the far edge.
+                SetSplitterDistance(mainSplit, mainSplit.Width - settings.RightPanelWidth - mainSplit.SplitterWidth);
+                SetSplitterDistance(historySplit, historySplit.Height - settings.DetailPanelHeight - historySplit.SplitterWidth);
+                SetSplitterDistance(detailSplit, settings.CommitFilesWidth);
+                SetSplitterDistance(rightSplit, rightSplit.Height - settings.CommitPanelHeight - rightSplit.SplitterWidth);
+            }
+            finally
+            {
+                _restoringLayout = false;
+                _layoutRestored = true;
+            }
         }
 
         public void StoreLayoutSettings(AppSettings settings)
         {
             settings.ShowOutputPanel = outputPanel.Visible;
             settings.DiffLayout = diffView.ViewLayout;
+            settings.RightPanelWidth = mainSplit.Width - mainSplit.SplitterDistance - mainSplit.SplitterWidth;
+            settings.DetailPanelHeight = historySplit.Height - historySplit.SplitterDistance - historySplit.SplitterWidth;
+            settings.CommitFilesWidth = detailSplit.SplitterDistance;
+            settings.CommitPanelHeight = rightSplit.Height - rightSplit.SplitterDistance - rightSplit.SplitterWidth;
+        }
+
+        /// <summary>
+        /// Moves a splitter, keeping it inside what the panel minimums allow. A distance outside
+        /// that range throws, and a stale setting must not take the view down with it.
+        /// </summary>
+        private static void SetSplitterDistance(SplitContainer split, int distance)
+        {
+            int extent = split.Orientation == Orientation.Vertical ? split.Width : split.Height;
+            int room = extent - split.SplitterWidth - split.Panel2MinSize;
+            if (room < split.Panel1MinSize) return;   // too small to honour either side
+            try
+            {
+                split.SplitterDistance = Math.Max(split.Panel1MinSize, Math.Min(distance, room));
+            }
+            catch (ArgumentException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        /// <summary>Remembers a splitter the user moved, so the next session opens the same way.</summary>
+        private void split_SplitterMoved(object sender, SplitterEventArgs e)
+        {
+            // Layout passes move the splitters before the saved sizes are applied; storing then
+            // would overwrite them with the designer defaults.
+            if (_restoringLayout || !_layoutRestored) return;
+            StoreLayoutSettings(AppSettings.Current);
         }
 
         protected override void OnLoad(EventArgs e)

@@ -69,14 +69,16 @@
             this.outputPanel = new GitClient.Controls.SurfacePanel();
             this.outputBox = new ModernWinForms.ModernTextBox();
             this.body = new GitClient.Controls.SurfacePanel();
-            this.leftColumn = new GitClient.Controls.SurfacePanel();
+            this.mainSplit = new ModernWinForms.ModernSplitContainer();
+            this.historySplit = new ModernWinForms.ModernSplitContainer();
+            this.detailSplit = new ModernWinForms.ModernSplitContainer();
+            this.rightSplit = new ModernWinForms.ModernSplitContainer();
             this.historyCard = new GitClient.Controls.SurfacePanel();
             this.historyList = new GitClient.Controls.HistoryListControl();
             this.historyHeader = new GitClient.Controls.SurfacePanel();
             this.historyTitleLabel = new GitClient.Controls.TextLabel();
             this.historyCountLabel = new GitClient.Controls.TextLabel();
             this.scopeButton = new GitClient.Controls.CommandButton();
-            this.leftGap = new GitClient.Controls.SurfacePanel();
             this.detailCard = new GitClient.Controls.SurfacePanel();
             this.detailBody = new GitClient.Controls.SurfacePanel();
             this.diffColumn = new GitClient.Controls.SurfacePanel();
@@ -108,7 +110,6 @@
             this.changesCountChip = new GitClient.Controls.Chip();
             this.stageAllButton = new GitClient.Controls.CommandButton();
             this.overflowButton = new GitClient.Controls.CommandButton();
-            this.rightGap = new GitClient.Controls.SurfacePanel();
             this.composerCard = new GitClient.Controls.SurfacePanel();
             this.commitToLabel = new GitClient.Controls.TextLabel();
             this.branchChip = new GitClient.Controls.Chip();
@@ -128,7 +129,22 @@
             this.statusBar.SuspendLayout();
             this.outputPanel.SuspendLayout();
             this.body.SuspendLayout();
-            this.leftColumn.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.mainSplit)).BeginInit();
+            this.mainSplit.Panel1.SuspendLayout();
+            this.mainSplit.Panel2.SuspendLayout();
+            this.mainSplit.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.historySplit)).BeginInit();
+            this.historySplit.Panel1.SuspendLayout();
+            this.historySplit.Panel2.SuspendLayout();
+            this.historySplit.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.detailSplit)).BeginInit();
+            this.detailSplit.Panel1.SuspendLayout();
+            this.detailSplit.Panel2.SuspendLayout();
+            this.detailSplit.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.rightSplit)).BeginInit();
+            this.rightSplit.Panel1.SuspendLayout();
+            this.rightSplit.Panel2.SuspendLayout();
+            this.rightSplit.SuspendLayout();
             this.historyCard.SuspendLayout();
             this.historyHeader.SuspendLayout();
             this.detailCard.SuspendLayout();
@@ -570,8 +586,7 @@
             //
             // body
             //
-            this.body.Controls.Add(this.leftColumn);
-            this.body.Controls.Add(this.rightColumn);
+            this.body.Controls.Add(this.mainSplit);
             this.body.CornerRadius = 0;
             this.body.Dock = System.Windows.Forms.DockStyle.Fill;
             this.body.Location = new System.Drawing.Point(0, 54);
@@ -581,18 +596,54 @@
             this.body.Surface = GitClient.Controls.SurfaceKind.Base;
             this.body.TabIndex = 1;
             //
-            // leftColumn
+            // mainSplit
             //
-            this.leftColumn.Controls.Add(this.historyCard);
-            this.leftColumn.Controls.Add(this.leftGap);
-            this.leftColumn.Controls.Add(this.detailCard);
-            this.leftColumn.CornerRadius = 0;
-            this.leftColumn.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.leftColumn.Location = new System.Drawing.Point(12, 12);
-            this.leftColumn.Name = "leftColumn";
-            this.leftColumn.Size = new System.Drawing.Size(940, 634);
-            this.leftColumn.Surface = GitClient.Controls.SurfaceKind.None;
-            this.leftColumn.TabIndex = 0;
+            this.mainSplit.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.mainSplit.FixedPanel = System.Windows.Forms.FixedPanel.Panel2;
+            this.mainSplit.Location = new System.Drawing.Point(12, 12);
+            this.mainSplit.Name = "mainSplit";
+            this.mainSplit.Panel1.Controls.Add(this.historySplit);
+            this.mainSplit.Panel1MinSize = 420;
+            this.mainSplit.Panel2.Controls.Add(this.rightColumn);
+            this.mainSplit.Panel2MinSize = 320;
+            this.mainSplit.Size = new System.Drawing.Size(1376, 634);
+            this.mainSplit.SplitterDistance = 928;
+            this.mainSplit.SplitterWidth = 12;
+            this.mainSplit.TabIndex = 0;
+            this.mainSplit.SplitterMoved += new System.Windows.Forms.SplitterEventHandler(this.split_SplitterMoved);
+            //
+            // historySplit
+            //
+            this.historySplit.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.historySplit.FixedPanel = System.Windows.Forms.FixedPanel.Panel2;
+            this.historySplit.Location = new System.Drawing.Point(0, 0);
+            this.historySplit.Name = "historySplit";
+            this.historySplit.Orientation = System.Windows.Forms.Orientation.Horizontal;
+            this.historySplit.Panel1.Controls.Add(this.historyCard);
+            this.historySplit.Panel1MinSize = 120;
+            this.historySplit.Panel2.Controls.Add(this.detailCard);
+            this.historySplit.Panel2MinSize = 160;
+            this.historySplit.Size = new System.Drawing.Size(928, 634);
+            this.historySplit.SplitterDistance = 230;
+            this.historySplit.SplitterWidth = 12;
+            this.historySplit.TabIndex = 0;
+            this.historySplit.SplitterMoved += new System.Windows.Forms.SplitterEventHandler(this.split_SplitterMoved);
+            //
+            // detailSplit
+            //
+            this.detailSplit.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.detailSplit.FixedPanel = System.Windows.Forms.FixedPanel.Panel1;
+            this.detailSplit.Location = new System.Drawing.Point(0, 0);
+            this.detailSplit.Name = "detailSplit";
+            this.detailSplit.Panel1.Controls.Add(this.commitFilesPanel);
+            this.detailSplit.Panel1MinSize = 180;
+            this.detailSplit.Panel2.Controls.Add(this.diffColumn);
+            this.detailSplit.Panel2MinSize = 240;
+            this.detailSplit.Size = new System.Drawing.Size(938, 312);
+            this.detailSplit.SplitterDistance = 321;
+            this.detailSplit.SplitterWidth = 12;
+            this.detailSplit.TabIndex = 0;
+            this.detailSplit.SplitterMoved += new System.Windows.Forms.SplitterEventHandler(this.split_SplitterMoved);
             //
             // historyCard
             //
@@ -661,31 +712,20 @@
             this.scopeButton.Text = "All branches";
             this.scopeButton.Click += new System.EventHandler(this.scopeButton_Click);
             //
-            // leftGap
-            //
-            this.leftGap.CornerRadius = 0;
-            this.leftGap.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.leftGap.Location = new System.Drawing.Point(0, 230);
-            this.leftGap.Name = "leftGap";
-            this.leftGap.Size = new System.Drawing.Size(940, 12);
-            this.leftGap.Surface = GitClient.Controls.SurfaceKind.None;
-            this.leftGap.TabIndex = 1;
-            //
             // detailCard
             //
             this.detailCard.Controls.Add(this.detailBody);
             this.detailCard.Controls.Add(this.detailHeader);
-            this.detailCard.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.detailCard.Location = new System.Drawing.Point(0, 242);
+            this.detailCard.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.detailCard.Location = new System.Drawing.Point(0, 0);
             this.detailCard.Name = "detailCard";
             this.detailCard.Padding = new System.Windows.Forms.Padding(1);
-            this.detailCard.Size = new System.Drawing.Size(940, 392);
+            this.detailCard.Size = new System.Drawing.Size(928, 392);
             this.detailCard.TabIndex = 2;
             //
             // detailBody
             //
-            this.detailBody.Controls.Add(this.diffColumn);
-            this.detailBody.Controls.Add(this.commitFilesPanel);
+            this.detailBody.Controls.Add(this.detailSplit);
             this.detailBody.CornerRadius = 0;
             this.detailBody.Dock = System.Windows.Forms.DockStyle.Fill;
             this.detailBody.Location = new System.Drawing.Point(1, 79);
@@ -700,9 +740,9 @@
             this.diffColumn.Controls.Add(this.diffHeader);
             this.diffColumn.CornerRadius = 0;
             this.diffColumn.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.diffColumn.Location = new System.Drawing.Point(321, 0);
+            this.diffColumn.Location = new System.Drawing.Point(0, 0);
             this.diffColumn.Name = "diffColumn";
-            this.diffColumn.Size = new System.Drawing.Size(617, 312);
+            this.diffColumn.Size = new System.Drawing.Size(605, 312);
             this.diffColumn.Surface = GitClient.Controls.SurfaceKind.None;
             this.diffColumn.TabIndex = 1;
             //
@@ -751,10 +791,9 @@
             //
             this.commitFilesPanel.Controls.Add(this.commitFilesList);
             this.commitFilesPanel.CornerRadius = 0;
-            this.commitFilesPanel.Dock = System.Windows.Forms.DockStyle.Left;
+            this.commitFilesPanel.Dock = System.Windows.Forms.DockStyle.Fill;
             this.commitFilesPanel.Location = new System.Drawing.Point(0, 0);
             this.commitFilesPanel.Name = "commitFilesPanel";
-            this.commitFilesPanel.RightDivider = true;
             this.commitFilesPanel.Size = new System.Drawing.Size(321, 312);
             this.commitFilesPanel.Surface = GitClient.Controls.SurfaceKind.None;
             this.commitFilesPanel.TabIndex = 0;
@@ -873,14 +912,11 @@
             //
             // rightColumn
             //
-            this.rightColumn.Controls.Add(this.changesCard);
-            this.rightColumn.Controls.Add(this.rightGap);
-            this.rightColumn.Controls.Add(this.composerCard);
+            this.rightColumn.Controls.Add(this.rightSplit);
             this.rightColumn.CornerRadius = 0;
-            this.rightColumn.Dock = System.Windows.Forms.DockStyle.Right;
-            this.rightColumn.Location = new System.Drawing.Point(952, 12);
+            this.rightColumn.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.rightColumn.Location = new System.Drawing.Point(0, 0);
             this.rightColumn.Name = "rightColumn";
-            this.rightColumn.Padding = new System.Windows.Forms.Padding(12, 0, 0, 0);
             this.rightColumn.Size = new System.Drawing.Size(436, 634);
             this.rightColumn.Surface = GitClient.Controls.SurfaceKind.None;
             this.rightColumn.TabIndex = 1;
@@ -891,10 +927,10 @@
             this.changesCard.Controls.Add(this.conflictBanner);
             this.changesCard.Controls.Add(this.changesHeader);
             this.changesCard.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.changesCard.Location = new System.Drawing.Point(12, 0);
+            this.changesCard.Location = new System.Drawing.Point(0, 0);
             this.changesCard.Name = "changesCard";
             this.changesCard.Padding = new System.Windows.Forms.Padding(1);
-            this.changesCard.Size = new System.Drawing.Size(424, 354);
+            this.changesCard.Size = new System.Drawing.Size(436, 354);
             this.changesCard.TabIndex = 0;
             //
             // changesList
@@ -1047,15 +1083,22 @@
             this.overflowButton.Size = new System.Drawing.Size(28, 28);
             this.overflowButton.TabIndex = 3;
             //
-            // rightGap
+            // rightSplit
             //
-            this.rightGap.CornerRadius = 0;
-            this.rightGap.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.rightGap.Location = new System.Drawing.Point(12, 354);
-            this.rightGap.Name = "rightGap";
-            this.rightGap.Size = new System.Drawing.Size(424, 12);
-            this.rightGap.Surface = GitClient.Controls.SurfaceKind.None;
-            this.rightGap.TabIndex = 1;
+            this.rightSplit.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.rightSplit.FixedPanel = System.Windows.Forms.FixedPanel.Panel2;
+            this.rightSplit.Location = new System.Drawing.Point(0, 0);
+            this.rightSplit.Name = "rightSplit";
+            this.rightSplit.Orientation = System.Windows.Forms.Orientation.Horizontal;
+            this.rightSplit.Panel1.Controls.Add(this.changesCard);
+            this.rightSplit.Panel1MinSize = 120;
+            this.rightSplit.Panel2.Controls.Add(this.composerCard);
+            this.rightSplit.Panel2MinSize = 200;
+            this.rightSplit.Size = new System.Drawing.Size(436, 634);
+            this.rightSplit.SplitterDistance = 354;
+            this.rightSplit.SplitterWidth = 12;
+            this.rightSplit.TabIndex = 0;
+            this.rightSplit.SplitterMoved += new System.Windows.Forms.SplitterEventHandler(this.split_SplitterMoved);
             //
             // composerCard
             //
@@ -1066,10 +1109,10 @@
             this.composerCard.Controls.Add(this.fieldGroup);
             this.composerCard.Controls.Add(this.commitButton);
             this.composerCard.Controls.Add(this.commitPushButton);
-            this.composerCard.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.composerCard.Location = new System.Drawing.Point(12, 366);
+            this.composerCard.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.composerCard.Location = new System.Drawing.Point(0, 0);
             this.composerCard.Name = "composerCard";
-            this.composerCard.Size = new System.Drawing.Size(424, 268);
+            this.composerCard.Size = new System.Drawing.Size(436, 268);
             this.composerCard.TabIndex = 2;
             //
             // commitToLabel
@@ -1273,7 +1316,22 @@
             this.statusBar.ResumeLayout(false);
             this.outputPanel.ResumeLayout(false);
             this.body.ResumeLayout(false);
-            this.leftColumn.ResumeLayout(false);
+            this.mainSplit.Panel1.ResumeLayout(false);
+            this.mainSplit.Panel2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.mainSplit)).EndInit();
+            this.mainSplit.ResumeLayout(false);
+            this.historySplit.Panel1.ResumeLayout(false);
+            this.historySplit.Panel2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.historySplit)).EndInit();
+            this.historySplit.ResumeLayout(false);
+            this.detailSplit.Panel1.ResumeLayout(false);
+            this.detailSplit.Panel2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.detailSplit)).EndInit();
+            this.detailSplit.ResumeLayout(false);
+            this.rightSplit.Panel1.ResumeLayout(false);
+            this.rightSplit.Panel2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.rightSplit)).EndInit();
+            this.rightSplit.ResumeLayout(false);
             this.historyCard.ResumeLayout(false);
             this.historyHeader.ResumeLayout(false);
             this.detailCard.ResumeLayout(false);
@@ -1340,14 +1398,16 @@
         private GitClient.Controls.SurfacePanel outputPanel;
         private ModernWinForms.ModernTextBox outputBox;
         private GitClient.Controls.SurfacePanel body;
-        private GitClient.Controls.SurfacePanel leftColumn;
+        private ModernWinForms.ModernSplitContainer mainSplit;
+        private ModernWinForms.ModernSplitContainer historySplit;
+        private ModernWinForms.ModernSplitContainer detailSplit;
+        private ModernWinForms.ModernSplitContainer rightSplit;
         private GitClient.Controls.SurfacePanel historyCard;
         private GitClient.Controls.SurfacePanel historyHeader;
         private GitClient.Controls.TextLabel historyTitleLabel;
         private GitClient.Controls.TextLabel historyCountLabel;
         private GitClient.Controls.CommandButton scopeButton;
         private GitClient.Controls.HistoryListControl historyList;
-        private GitClient.Controls.SurfacePanel leftGap;
         private GitClient.Controls.SurfacePanel detailCard;
         private GitClient.Controls.SurfacePanel detailHeader;
         private GitClient.Controls.AvatarBox detailAvatar;
@@ -1379,7 +1439,6 @@
         private GitClient.Controls.CommandButton continueButton;
         private GitClient.Controls.CommandButton abortButton;
         private GitClient.Controls.ChangesListControl changesList;
-        private GitClient.Controls.SurfacePanel rightGap;
         private GitClient.Controls.SurfacePanel composerCard;
         private GitClient.Controls.TextLabel commitToLabel;
         private GitClient.Controls.Chip branchChip;
