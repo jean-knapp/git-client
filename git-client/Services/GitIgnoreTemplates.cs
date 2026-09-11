@@ -99,6 +99,7 @@ namespace GitClient.Services
             new GitIgnoreTemplate("Windows", "Explorer and shell leftovers", Windows),
             new GitIgnoreTemplate("Node", "node_modules, logs and build output", Node),
             new GitIgnoreTemplate("Python", "Byte code, virtual environments and caches", Python),
+            new GitIgnoreTemplate("Android", "Gradle builds, APKs, local.properties and keystores", Android),
         };
 
         private const string VisualStudio = @"# ---- Visual Studio ----
@@ -251,6 +252,59 @@ env/
 .coverage
 htmlcov/
 .ipynb_checkpoints/
+";
+
+        private const string Android = @"# ---- Android ----
+# Gradle and build output
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+.kotlin/
+
+# Machine-specific configuration (SDK path, local secrets)
+local.properties
+
+# Android Studio and IntelliJ
+*.iml
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/gradle.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries
+.idea/libraries
+.idea/caches
+.idea/navEditor.xml
+.idea/deploymentTargetDropDown.xml
+.idea/deploymentTargetSelector.xml
+.navigation/
+
+# Built application files
+*.apk
+*.aab
+*.aar
+*.ap_
+*.dex
+*.class
+output-metadata.json
+release/
+
+# Older Eclipse-style output
+bin/
+gen/
+out/
+
+# Signing keys stay out of the repository
+*.jks
+*.keystore
+
+# Lint and logs
+lint/intermediates/
+lint/generated/
+lint/outputs/
+lint/tmp/
+*.log
 ";
     }
 }

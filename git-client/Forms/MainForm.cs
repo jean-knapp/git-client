@@ -17,6 +17,12 @@ namespace GitClient.Forms
     public partial class MainForm : ModernForm
     {
         private readonly List<RepositoryView> _views = new List<RepositoryView>();
+
+        // Project icons on the tabs (an Android launcher icon, a Visual Studio project's icon or a PHP site's favicon), rendered large and drawn at 16 px.
+        private const int TabIconRenderSize = 64;
+        private static readonly TimeSpan TabIconRecheck = TimeSpan.FromSeconds(30);
+        private readonly Dictionary<RepositoryView, Bitmap> _tabIcons = new Dictionary<RepositoryView, Bitmap>();
+        private readonly Dictionary<RepositoryView, DateTime> _tabIconChecked = new Dictionary<RepositoryView, DateTime>();
         private RepositoryView _activeView;
         private int _tabMenuIndex = -1;
         private Icon _titleIcon;
@@ -158,6 +164,11 @@ namespace GitClient.Forms
         protected override async void OnActivated(EventArgs e)
         {
             base.OnActivated(e);
+            // Coming back from an IDE or editor may mean a new icon.
+            foreach (var view in _views.ToList())
+            {
+                if (!_tabIconChecked.TryGetValue(view, out var checkedAt) || DateTime.UtcNow - checkedAt > TabIconRecheck) _ = UpdateTabIconAsync(view);
+            }
             if (_activeView != null) await _activeView.RefreshIfIdleAsync();
         }
 
@@ -218,6 +229,7 @@ namespace GitClient.Forms
 
             view.ApplyLayoutSettings(AppSettings.Current);
             RefreshTabs();
+            _ = UpdateTabIconAsync(view);
 
             if (activate)
             {
@@ -239,12 +251,33 @@ namespace GitClient.Forms
         {
             var tabs = _views.Select(v => new RepositoryTab
             {
+                Icon = _tabIcons.TryGetValue(v, out var icon) ? icon : null,
                 Title = v.TabTitle,
                 Branch = v.TabBranch,
                 ToolTip = v.TabToolTip,
                 Tag = v,
             });
             tabStrip.Refresh(tabs, _activeView == null ? 0 : _views.IndexOf(_activeView));
+        }
+
+        /// <summary>Looks for the project's icon in the repository, off the UI thread, and shows it on the tab.</summary>
+        private async Task UpdateTabIconAsync(RepositoryView view)
+        {
+            var root = view.RepositoryPath;
+            if (root == null) return;
+            _tabIconChecked[view] = DateTime.UtcNow;
+            var icon = await Task.Run(() => ProjectIcon.Load(root, TabIconRenderSize));
+            if (!_views.Contains(view))
+            {
+                icon?.Dispose();
+                return;
+            }
+            _tabIcons.TryGetValue(view, out var previous);
+            if (icon == null && previous == null) return;
+            if (icon == null) _tabIcons.Remove(view);
+            else _tabIcons[view] = icon;
+            RefreshTabs();
+            previous?.Dispose();
         }
 
         private void ActivateView(int index)
@@ -269,6 +302,12 @@ namespace GitClient.Forms
             var view = _views[index];
             tabStrip.Refresh(Enumerable.Empty<RepositoryTab>(), -1);
             _views.RemoveAt(index);
+            if (_tabIcons.TryGetValue(view, out var icon))
+            {
+                _tabIcons.Remove(view);
+                icon.Dispose();
+            }
+            _tabIconChecked.Remove(view);
             view.TitleChanged -= View_TitleChanged;
             view.SettingsRequested -= settingsItem_Click;
             hostPanel.Controls.Remove(view);

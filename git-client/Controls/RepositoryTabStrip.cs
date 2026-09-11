@@ -11,6 +11,9 @@ namespace GitClient.Controls
     /// <summary>One repository tab: the repository name plus its current branch.</summary>
     public sealed class RepositoryTab
     {
+        /// <summary>The project's own icon, e.g. an Android app's launcher icon; null for none.</summary>
+        public Image Icon { get; set; }
+
         public string Title { get; set; }
         public string Branch { get; set; }
         public string ToolTip { get; set; }
@@ -24,8 +27,9 @@ namespace GitClient.Controls
     }
 
     /// <summary>
-    /// The 38 px tab strip from the redesign: 30 px pill tabs carrying the repository name and its
-    /// branch, a close button on the active tab (and on hover elsewhere), and a trailing + button.
+    /// The 38 px tab strip from the redesign: 30 px pill tabs carrying the project icon when there is
+    /// one, the repository name and its branch, a close button on the active tab (and on hover
+    /// elsewhere), and a trailing + button.
     /// </summary>
     [ToolboxItem(true)]
     [DefaultEvent("SelectedIndexChanged")]
@@ -38,6 +42,8 @@ namespace GitClient.Controls
         private const int TabPaddingRight = 6;
         private const int CloseSize = 20;
         private const int AddSize = 30;
+        private const int IconSize = 16;
+        private const int IconGap = 7;
 
         private readonly List<RepositoryTab> _tabs = new List<RepositoryTab>();
         private int _selectedIndex = -1;
@@ -98,6 +104,7 @@ namespace GitClient.Controls
             var tab = _tabs[index];
             bool active = index == _selectedIndex;
             int width = TabPaddingLeft;
+            if (tab.Icon != null) width += IconSize + IconGap;
             width += Draw.MeasureWidth(tab.Title ?? string.Empty, Fonts.Ui(13f, active));
             if (!string.IsNullOrEmpty(tab.Branch)) width += 8 + Draw.MeasureWidth(tab.Branch, Fonts.Ui(12f));
             width += 8 + CloseSize + TabPaddingRight;
@@ -178,6 +185,18 @@ namespace GitClient.Controls
                 var tab = _tabs[i];
                 int x = bounds.X + TabPaddingLeft;
                 int right = bounds.Right - (TabPaddingRight + CloseSize + 8);
+
+                if (tab.Icon != null)
+                {
+                    var interpolation = g.InterpolationMode;
+                    var pixelOffset = g.PixelOffsetMode;
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                    g.DrawImage(tab.Icon, new Rectangle(x, bounds.Y + (bounds.Height - IconSize) / 2, IconSize, IconSize));
+                    g.InterpolationMode = interpolation;
+                    g.PixelOffsetMode = pixelOffset;
+                    x += IconSize + IconGap;
+                }
 
                 var titleFont = Fonts.Ui(13f, active);
                 var titleColor = active ? p.Foreground : p.Foreground2;
