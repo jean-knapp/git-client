@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -30,6 +30,9 @@ namespace GitClient.Controls
     /// The 38 px tab strip from the redesign: 30 px pill tabs carrying the project icon when there is
     /// one, the repository name and its branch, a close button on the active tab (and on hover
     /// elsewhere), and a trailing + button.
+    ///
+    /// Too many tabs to fit shrink to <see cref="MinTabWidth"/> first; past that the row scrolls, with
+    /// an arrow at each end, the wheel, and the selected tab kept in view. The + button stays put.
     /// </summary>
     [ToolboxItem(true)]
     [DefaultEvent("SelectedIndexChanged")]
@@ -44,12 +47,28 @@ namespace GitClient.Controls
         private const int AddSize = 30;
         private const int IconSize = 16;
         private const int IconGap = 7;
+        private const int MinTabWidth = 120;
+        private const int MaxTabWidth = 280;
+        private const int MinBranchWidth = 40;
+        private const int ArrowSize = 24;
+        private const int ArrowGap = 9;
 
         private readonly List<RepositoryTab> _tabs = new List<RepositoryTab>();
+        private readonly List<int> _widths = new List<int>();
         private int _selectedIndex = -1;
         private int _hotIndex = -1;
         private bool _hotClose;
         private bool _hotAdd;
+        private bool _hotLeft;
+        private bool _hotRight;
+
+        // Laid out on demand: the widths tabs ended up with, and how far the row is scrolled.
+        private bool _layoutDirty = true;
+        private int _layoutWidth = -1;
+        private int _contentWidth;
+        private int _viewportWidth;
+        private bool _overflow;
+        private int _scroll;
 
         public event EventHandler SelectedIndexChanged;
         public event EventHandler<TabEventArgs> TabCloseRequested;
@@ -77,6 +96,9 @@ namespace GitClient.Controls
                 int clamped = _tabs.Count == 0 ? -1 : Math.Max(0, Math.Min(_tabs.Count - 1, value));
                 if (clamped == _selectedIndex) return;
                 _selectedIndex = clamped;
+                // The active tab is bold, so the widths change with the selection.
+                _layoutDirty = true;
+                EnsureSelectedVisible();
                 Invalidate();
                 SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
             }
@@ -86,6 +108,8 @@ namespace GitClient.Controls
         public void SetSelectedIndexQuiet(int index)
         {
             _selectedIndex = _tabs.Count == 0 ? -1 : Math.Max(-1, Math.Min(_tabs.Count - 1, index));
+            _layoutDirty = true;
+            EnsureSelectedVisible();
             Invalidate();
         }
 
@@ -94,12 +118,15 @@ namespace GitClient.Controls
             _tabs.Clear();
             if (tabs != null) _tabs.AddRange(tabs);
             _selectedIndex = _tabs.Count == 0 ? -1 : Math.Max(0, Math.Min(_tabs.Count - 1, selectedIndex));
+            _layoutDirty = true;
+            EnsureSelectedVisible();
             Invalidate();
         }
 
         // ------------------------------------------------------------------ geometry
 
-        private int TabWidth(int index)
+        /// <summary>The width a tab would like: everything it carries, up to <see cref="MaxTabWidth"/>.</summary>
+        private int NaturalWidth(int index)
         {
             var tab = _tabs[index];
             bool active = index == _selectedIndex;
@@ -108,26 +135,90 @@ namespace GitClient.Controls
             width += Draw.MeasureWidth(tab.Title ?? string.Empty, Fonts.Ui(13f, active));
             if (!string.IsNullOrEmpty(tab.Branch)) width += 8 + Draw.MeasureWidth(tab.Branch, Fonts.Ui(12f));
             width += 8 + CloseSize + TabPaddingRight;
-            return Math.Min(280, width);
+            return Math.Min(MaxTabWidth, width);
+        }
+
+        /// <summary>
+        /// Shares the room left of the + button between the tabs: they shrink to
+        /// <see cref="MinTabWidth"/> before the row starts scrolling under the arrows.
+        /// </summary>
+        private void EnsureLayout()
+        {
+            if (!_layoutDirty && _layoutWidth == Width) return;
+            _layoutDirty = false;
+            _layoutWidth = Width;
+
+            int room = Math.Max(0, Width - StripPadding * 2 - AddSize - TabGap);
+            _widths.Clear();
+            int natural = 0;
+            for (int i = 0; i < _tabs.Count; i++)
+            {
+                int width = NaturalWidth(i);
+                _widths.Add(width);
+                natural += width + TabGap;
+            }
+            natural = Math.Max(0, natural - TabGap);
+
+            if (natural > room && _tabs.Count > 0)
+            {
+                int each = Math.Max(MinTabWidth, (room - TabGap * (_tabs.Count - 1)) / _tabs.Count);
+                for (int i = 0; i < _widths.Count; i++) _widths[i] = Math.Min(_widths[i], each);
+            }
+
+            _contentWidth = 0;
+            foreach (var width in _widths) _contentWidth += width + TabGap;
+            _contentWidth = Math.Max(0, _contentWidth - TabGap);
+            _overflow = _contentWidth > room;
+            _viewportWidth = Math.Max(0, room - (_overflow ? (ArrowSize + ArrowGap) * 2 : 0));
+            _scroll = Math.Max(0, Math.Min(_scroll, Math.Max(0, _contentWidth - _viewportWidth)));
+        }
+
+        /// <summary>The strip the tabs scroll inside: between the arrows when the row overflows.</summary>
+        private Rectangle Viewport
+        {
+            get
+            {
+                EnsureLayout();
+                return new Rectangle(StripPadding + (_overflow ? ArrowSize + ArrowGap : 0), 0, _viewportWidth, Height);
+            }
+        }
+
+        private int MaxScroll
+        {
+            get
+            {
+                EnsureLayout();
+                return Math.Max(0, _contentWidth - _viewportWidth);
+            }
         }
 
         private Rectangle TabBounds(int index)
         {
-            int x = StripPadding;
-            for (int i = 0; i < _tabs.Count; i++)
-            {
-                int w = TabWidth(i);
-                if (i == index) return new Rectangle(x, (Height - TabHeight) / 2, w, TabHeight);
-                x += w + TabGap;
-            }
-            return Rectangle.Empty;
+            EnsureLayout();
+            if (index < 0 || index >= _widths.Count) return Rectangle.Empty;
+            int x = Viewport.X - _scroll;
+            for (int i = 0; i < index; i++) x += _widths[i] + TabGap;
+            return new Rectangle(x, (Height - TabHeight) / 2, _widths[index], TabHeight);
         }
 
         private Rectangle AddBounds()
         {
-            int x = StripPadding;
-            for (int i = 0; i < _tabs.Count; i++) x += TabWidth(i) + TabGap;
+            EnsureLayout();
+            // While the row scrolls the + button stays at the right edge, always in reach.
+            int x = _overflow ? Width - StripPadding - AddSize : Math.Min(Viewport.X + _contentWidth + TabGap, Width - StripPadding - AddSize);
             return new Rectangle(x, (Height - AddSize) / 2, AddSize, AddSize);
+        }
+
+        private Rectangle LeftArrowBounds()
+        {
+            EnsureLayout();
+            return _overflow ? new Rectangle(StripPadding, (Height - ArrowSize) / 2, ArrowSize, ArrowSize) : Rectangle.Empty;
+        }
+
+        private Rectangle RightArrowBounds()
+        {
+            EnsureLayout();
+            return _overflow ? new Rectangle(Viewport.Right + ArrowGap, (Height - ArrowSize) / 2, ArrowSize, ArrowSize) : Rectangle.Empty;
         }
 
         private Rectangle CloseBounds(int index)
@@ -139,11 +230,73 @@ namespace GitClient.Controls
 
         public int TabIndexAt(Point point)
         {
+            var viewport = Viewport;
+            if (point.X < viewport.X || point.X >= viewport.Right) return -1;
             for (int i = 0; i < _tabs.Count; i++)
             {
                 if (TabBounds(i).Contains(point)) return i;
             }
             return -1;
+        }
+
+        // ------------------------------------------------------------------ scrolling
+
+        private void SetScroll(int value)
+        {
+            int clamped = Math.Max(0, Math.Min(value, MaxScroll));
+            if (clamped == _scroll) return;
+            _scroll = clamped;
+            Invalidate();
+        }
+
+        /// <summary>
+        /// Scrolls until the next half-hidden tab on that side is whole. A tab clipped by a sliver
+        /// would barely move the row, so the click takes the one after it instead.
+        /// </summary>
+        private void ScrollOneTab(int direction)
+        {
+            EnsureLayout();
+            var viewport = Viewport;
+            if (direction > 0)
+            {
+                for (int i = 0; i < _tabs.Count; i++)
+                {
+                    int step = TabBounds(i).Right - viewport.Right;
+                    if (step <= 0) continue;
+                    if (step < MinTabWidth / 2 && i + 1 < _tabs.Count) step = TabBounds(i + 1).Right - viewport.Right;
+                    SetScroll(_scroll + step);
+                    return;
+                }
+                SetScroll(MaxScroll);
+                return;
+            }
+            for (int i = _tabs.Count - 1; i >= 0; i--)
+            {
+                int step = viewport.X - TabBounds(i).X;
+                if (step <= 0) continue;
+                if (step < MinTabWidth / 2 && i > 0) step = viewport.X - TabBounds(i - 1).X;
+                SetScroll(_scroll - step);
+                return;
+            }
+            SetScroll(0);
+        }
+
+        /// <summary>Brings the selected tab into view, e.g. after Ctrl+Tab or opening a repository.</summary>
+        public void EnsureSelectedVisible()
+        {
+            EnsureLayout();
+            if (_selectedIndex < 0 || !_overflow) return;
+            var viewport = Viewport;
+            var bounds = TabBounds(_selectedIndex);
+            if (bounds.X < viewport.X) SetScroll(_scroll - (viewport.X - bounds.X));
+            else if (bounds.Right > viewport.Right) SetScroll(_scroll + (bounds.Right - viewport.Right));
+        }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            _layoutDirty = true;
+            EnsureSelectedVisible();
         }
 
         // ------------------------------------------------------------------ painting
@@ -165,10 +318,48 @@ namespace GitClient.Controls
             var surface = ParentSurface();
             Draw.Fill(g, ClientRectangle, surface);
 
+            var viewport = Viewport;
+            if (_overflow && viewport.Width > 0)
+            {
+                // GDI text ignores a clipping region, so the scrolling row goes into a bitmap of its
+                // own: no title can spill over the arrows or the + button.
+                using (var layer = new Bitmap(viewport.Width, Height))
+                using (var layerGraphics = Graphics.FromImage(layer))
+                {
+                    Draw.Fill(layerGraphics, new Rectangle(0, 0, viewport.Width, Height), surface);
+                    PaintTabs(layerGraphics, surface, viewport.X);
+                    g.DrawImage(layer, viewport.X, 0);
+                }
+            }
+            else
+            {
+                PaintTabs(g, surface, 0);
+            }
+
+            if (_overflow)
+            {
+                PaintArrow(g, LeftArrowBounds(), Icons.ChevronLeft, _hotLeft, _scroll > 0, surface);
+                PaintArrow(g, RightArrowBounds(), Icons.ChevronRight, _hotRight, _scroll < MaxScroll, surface);
+            }
+
+            var add = AddBounds();
+            if (add.X + add.Width <= Width)
+            {
+                if (_hotAdd) Draw.FillRounded(g, add, 5f, p.HoverOn(surface));
+                IconCache.DrawCentered(g, Icons.Plus, 14, p.Foreground2, add.X + add.Width / 2, add.Y + add.Height / 2);
+            }
+        }
+
+        /// <summary>Paints the row of tabs, moved left by <paramref name="offsetX"/> when it is scrolled.</summary>
+        private void PaintTabs(Graphics g, Color surface, int offsetX)
+        {
+            var p = Theme.Palette;
+            var viewport = Viewport;
             for (int i = 0; i < _tabs.Count; i++)
             {
                 var bounds = TabBounds(i);
-                if (bounds.IsEmpty || bounds.X > Width) continue;
+                if (bounds.IsEmpty || bounds.Right < viewport.X || bounds.X > viewport.Right) continue;
+                bounds.Offset(-offsetX, 0);
                 bool active = i == _selectedIndex;
                 bool hot = i == _hotIndex;
 
@@ -204,24 +395,29 @@ namespace GitClient.Controls
                 Draw.Text(g, tab.Title, titleFont, new Rectangle(x, bounds.Y, titleWidth, bounds.Height), titleColor, Draw.LeftMiddle);
                 x += titleWidth + 8;
 
-                if (!string.IsNullOrEmpty(tab.Branch) && x < right)
+                // A sliver of a branch name reads as a typo, so it is shown only when it has room.
+                if (!string.IsNullOrEmpty(tab.Branch) && right - x >= MinBranchWidth)
                 {
-                    Draw.Text(g, tab.Branch, Fonts.Ui(12f), new Rectangle(x, bounds.Y, Math.Max(0, right - x), bounds.Height), p.Foreground3, Draw.LeftMiddle);
+                    Draw.Text(g, tab.Branch, Fonts.Ui(12f), new Rectangle(x, bounds.Y, right - x, bounds.Height), p.Foreground3, Draw.LeftMiddle);
                 }
 
                 var close = CloseBounds(i);
+                close.Offset(-offsetX, 0);
                 bool hotClose = _hotClose && i == _hotIndex;
                 if (hotClose) Draw.FillRounded(g, close, 4f, p.Fill2On(surface));
                 IconCache.DrawCentered(g, Icons.Cross, 9, hotClose ? p.Foreground : p.Foreground3,
                     close.X + close.Width / 2, close.Y + close.Height / 2);
             }
 
-            var add = AddBounds();
-            if (add.X + add.Width <= Width)
-            {
-                if (_hotAdd) Draw.FillRounded(g, add, 5f, p.HoverOn(surface));
-                IconCache.DrawCentered(g, Icons.Plus, 14, p.Foreground2, add.X + add.Width / 2, add.Y + add.Height / 2);
-            }
+        }
+
+        /// <summary>A scroll arrow, greyed out at the end of the row.</summary>
+        private void PaintArrow(Graphics g, Rectangle bounds, string icon, bool hot, bool enabled, Color surface)
+        {
+            var p = Theme.Palette;
+            if (hot && enabled) Draw.FillRounded(g, bounds, 5f, p.HoverOn(surface));
+            IconCache.DrawCentered(g, icon, 11, enabled ? (hot ? p.Foreground : p.Foreground2) : p.Foreground3,
+                bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
         }
 
         // ------------------------------------------------------------------ input
@@ -232,11 +428,15 @@ namespace GitClient.Controls
             int index = TabIndexAt(e.Location);
             bool hotClose = index >= 0 && CloseBounds(index).Contains(e.Location);
             bool hotAdd = AddBounds().Contains(e.Location);
-            if (index != _hotIndex || hotClose != _hotClose || hotAdd != _hotAdd)
+            bool hotLeft = LeftArrowBounds().Contains(e.Location);
+            bool hotRight = RightArrowBounds().Contains(e.Location);
+            if (index != _hotIndex || hotClose != _hotClose || hotAdd != _hotAdd || hotLeft != _hotLeft || hotRight != _hotRight)
             {
                 _hotIndex = index;
                 _hotClose = hotClose;
                 _hotAdd = hotAdd;
+                _hotLeft = hotLeft;
+                _hotRight = hotRight;
                 Invalidate();
             }
         }
@@ -244,11 +444,13 @@ namespace GitClient.Controls
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
-            if (_hotIndex != -1 || _hotAdd || _hotClose)
+            if (_hotIndex != -1 || _hotAdd || _hotClose || _hotLeft || _hotRight)
             {
                 _hotIndex = -1;
                 _hotClose = false;
                 _hotAdd = false;
+                _hotLeft = false;
+                _hotRight = false;
                 Invalidate();
             }
         }
@@ -263,6 +465,16 @@ namespace GitClient.Controls
                 return;
             }
             if (e.Button != MouseButtons.Left) return;
+            if (LeftArrowBounds().Contains(e.Location))
+            {
+                ScrollOneTab(-1);
+                return;
+            }
+            if (RightArrowBounds().Contains(e.Location))
+            {
+                ScrollOneTab(1);
+                return;
+            }
             if (AddBounds().Contains(e.Location)) return;   // the menu opens on mouse up
 
             int tab = TabIndexAt(e.Location);
@@ -273,6 +485,15 @@ namespace GitClient.Controls
                 return;
             }
             SelectedIndex = tab;
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            EnsureLayout();
+            if (!_overflow) return;
+            // A notch moves half a tab, so the row keeps up with the wheel without flying past.
+            SetScroll(_scroll - e.Delta * (MinTabWidth / 2) / 120);
         }
 
         // Menus open on mouse up: a pop-up shown while the button is still down closes again as

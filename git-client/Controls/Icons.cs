@@ -1,4 +1,4 @@
-namespace GitClient.Controls
+﻿namespace GitClient.Controls
 {
     /// <summary>
     /// SVG icon markup used by buttons, menus and tree nodes. All icons use <c>currentColor</c> so the
@@ -42,6 +42,8 @@ namespace GitClient.Controls
         public const string Discard = Open + "<path fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" d=\"M6 6l12 12M18 6L6 18\"/><circle fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" cx=\"12\" cy=\"12\" r=\"9\"/>" + Close;
         public const string Search = Open + "<circle fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" cx=\"10.5\" cy=\"10.5\" r=\"6.5\"/><path fill=\"currentColor\" d=\"M15.6 17l1.4-1.4 4 4-1.4 1.4z\"/>" + Close;
         public const string Overflow = Open + "<circle fill=\"currentColor\" cx=\"12\" cy=\"5\" r=\"1.9\"/><circle fill=\"currentColor\" cx=\"12\" cy=\"12\" r=\"1.9\"/><circle fill=\"currentColor\" cx=\"12\" cy=\"19\" r=\"1.9\"/>" + Close;
+        public const string ChevronLeft = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 12 12\"><path fill=\"currentColor\" d=\"M7.8 2.1L3.9 6l3.9 3.9.9-.9L5.7 6l2.99-3z\"/></svg>";
+        public const string ChevronRight = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 12 12\"><path fill=\"currentColor\" d=\"M4.2 2.1L8.1 6l-3.9 3.9-.9-.9L6.3 6 3.3 3z\"/></svg>";
         public const string ChevronDown = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 12 12\"><path fill=\"currentColor\" d=\"M1.5 4L6 8.5 10.5 4l-.9-.9L6 6.7 2.4 3.1z\"/></svg>";
         public const string Warning = Open + "<path fill=\"currentColor\" d=\"M12 2.4l10.4 18H1.6z\"/><path fill=\"#000\" fill-opacity=\"0.55\" d=\"M11 9h2v6h-2zM11 16.2h2v2.2h-2z\"/>" + Close;
         public const string Init = Open + "<circle fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" cx=\"12\" cy=\"12\" r=\"9\"/><path fill=\"currentColor\" d=\"M11 7h2v4h4v2h-4v4h-2v-4H7v-2h4z\"/>" + Close;
