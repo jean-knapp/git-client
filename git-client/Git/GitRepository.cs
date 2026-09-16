@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -52,15 +52,49 @@ namespace GitClient.Git
             return GitRunner.RunAsync(path, "init");
         }
 
-        public static Task<GitResult> CloneAsync(string url, string destination, bool recurseSubmodules, IProgress<string> progress, CancellationToken cancellationToken)
+        /// <summary>
+        /// Clones <paramref name="url"/> into <paramref name="destination"/>. A blobless clone takes the
+        /// whole history but leaves file contents on the server until they are needed, and a sparse one
+        /// checks out only the folders asked for afterwards - both make a big repository much smaller
+        /// on disk.
+        /// </summary>
+        public static Task<GitResult> CloneAsync(string url, string destination, bool recurseSubmodules, IProgress<string> progress, CancellationToken cancellationToken,
+            bool blobless = false, bool sparse = false)
         {
             var parent = Path.GetDirectoryName(Path.GetFullPath(destination));
             if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
             var args = new List<string> { "clone", "--progress" };
             if (recurseSubmodules) args.Add("--recurse-submodules");
+            // Servers that cannot filter ignore this and send everything, so the clone still works.
+            if (blobless) args.Add("--filter=blob:none");
+            if (sparse) args.Add("--sparse");
             args.Add(url);
             args.Add(destination);
             return GitRunner.RunAsync(parent, args, new GitRunOptions { Progress = progress }, cancellationToken);
+        }
+
+        /// <summary>
+        /// The folders the checkout does not have. git takes any pattern for a sparse checkout, typo
+        /// included, and quietly checks out nothing, so the caller can say which name went nowhere.
+        /// </summary>
+        public static async Task<List<string>> MissingFoldersAsync(string path, IEnumerable<string> folders, CancellationToken cancellationToken)
+        {
+            var missing = new List<string>();
+            foreach (var folder in folders)
+            {
+                var args = new List<string> { "ls-tree", "-d", "--name-only", "HEAD", folder.Replace('\\', '/') };
+                var result = await GitRunner.RunAsync(path, args, null, cancellationToken).ConfigureAwait(false);
+                if (!result.Succeeded || result.StandardOutput.Trim().Length == 0) missing.Add(folder);
+            }
+            return missing;
+        }
+
+        /// <summary>Limits a working tree to the given folders, leaving the rest in history only.</summary>
+        public static Task<GitResult> SetSparseFoldersAsync(string path, IEnumerable<string> folders, CancellationToken cancellationToken)
+        {
+            var args = new List<string> { "sparse-checkout", "set" };
+            args.AddRange(folders);
+            return GitRunner.RunAsync(path, args, null, cancellationToken);
         }
 
         public static Task<string> GetGlobalConfigAsync(string key) => GetConfigValueAsync(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), key, true);

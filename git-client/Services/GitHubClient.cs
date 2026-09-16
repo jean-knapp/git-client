@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -36,6 +36,16 @@ namespace GitClient.Services
         public string SshUrl { get; set; }
         public string HtmlUrl { get; set; }
         public string DefaultBranch { get; set; }
+
+        /// <summary>The repository's own name, without the owner.</summary>
+        public string Name { get; set; }
+
+        public string Owner { get; set; }
+        public string Description { get; set; }
+        public bool IsPrivate { get; set; }
+
+        /// <summary>When it was last pushed to, which is how the picker sorts.</summary>
+        public DateTime? PushedUtc { get; set; }
     }
 
     /// <summary>An error GitHub reported, with its status code so callers can react to 401/403.</summary>
@@ -60,6 +70,7 @@ namespace GitClient.Services
     public static class GitHubClient
     {
         private const string ApiRoot = "https://api.github.com";
+        private const int MaxRepositoryPages = 4;
 
         public static async Task<GitHubOwner> GetUserAsync(string token)
         {
@@ -92,6 +103,42 @@ namespace GitClient.Services
             return owners;
         }
 
+        /// <summary>
+        /// The repositories the account can reach - its own, the ones it collaborates on and the ones
+        /// its organisations hold - newest push first. Stops after <see cref="MaxRepositoryPages"/>
+        /// pages, which is plenty for a picker.
+        /// </summary>
+        public static async Task<List<GitHubRepository>> GetRepositoriesAsync(string token)
+        {
+            var repositories = new List<GitHubRepository>();
+            for (int page = 1; page <= MaxRepositoryPages; page++)
+            {
+                var json = await GetAsync(token, "/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member&page=" + page).ConfigureAwait(false) as object[];
+                if (json == null || json.Length == 0) break;
+                foreach (var entry in json) repositories.Add(ToRepository(entry));
+                if (json.Length < 100) break;
+            }
+            return repositories;
+        }
+
+        private static GitHubRepository ToRepository(object json)
+        {
+            var owner = json is Dictionary<string, object> map && map.TryGetValue("owner", out var value) ? Text(value, "login") : null;
+            return new GitHubRepository
+            {
+                FullName = Text(json, "full_name"),
+                Name = Text(json, "name"),
+                Owner = owner,
+                Description = Text(json, "description"),
+                CloneUrl = Text(json, "clone_url"),
+                SshUrl = Text(json, "ssh_url"),
+                HtmlUrl = Text(json, "html_url"),
+                DefaultBranch = Text(json, "default_branch"),
+                IsPrivate = Flag(json, "private"),
+                PushedUtc = Time(json, "pushed_at") ?? Time(json, "updated_at"),
+            };
+        }
+
         public static async Task<GitHubRepository> CreateRepositoryAsync(
             string token, GitHubOwner owner, string name, string description, bool isPrivate)
         {
@@ -106,14 +153,7 @@ namespace GitClient.Services
 
             var path = owner != null && owner.IsOrganization ? "/orgs/" + owner.Login + "/repos" : "/user/repos";
             var json = await PostAsync(token, path, body.ToString()).ConfigureAwait(false);
-            return new GitHubRepository
-            {
-                FullName = Text(json, "full_name"),
-                CloneUrl = Text(json, "clone_url"),
-                SshUrl = Text(json, "ssh_url"),
-                HtmlUrl = Text(json, "html_url"),
-                DefaultBranch = Text(json, "default_branch"),
-            };
+            return ToRepository(json);
         }
 
         /// <summary>
@@ -240,6 +280,23 @@ namespace GitClient.Services
             object value;
             if (map == null || !map.TryGetValue(key, out value) || value == null) return null;
             return Convert.ToString(value);
+        }
+
+        private static bool Flag(object json, string key)
+        {
+            var map = json as Dictionary<string, object>;
+            return map != null && map.TryGetValue(key, out var value) && value is bool flag && flag;
+        }
+
+        /// <summary>A GitHub timestamp in UTC, or null when it is missing or unreadable.</summary>
+        private static DateTime? Time(object json, string key)
+        {
+            var text = Text(json, key);
+            if (string.IsNullOrEmpty(text)) return null;
+            return DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var when)
+                ? when
+                : (DateTime?)null;
         }
 
         private static string Quote(string value)
