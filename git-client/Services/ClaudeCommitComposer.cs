@@ -134,7 +134,7 @@ namespace GitClient.Services
             return suggestion;
         }
 
-        private static async Task<string> RunAsync(string executable, IList<string> args, string workingDirectory, string stdin, CancellationToken cancellationToken)
+        internal static async Task<string> RunAsync(string executable, IList<string> args, string workingDirectory, string stdin, CancellationToken cancellationToken)
         {
             var psi = new ProcessStartInfo
             {
