@@ -442,7 +442,16 @@ namespace GitClient.Views
             overflowButton.SetBounds(right - 28, 8, 28, 28);
             stageAllButton.Width = stageAllButton.PreferredWidth;
             stageAllButton.Left = right - 28 - 4 - stageAllButton.Width;
-            claudeStageButton.SetBounds(stageAllButton.Left - 4 - 28, 8, 28, 28);
+            // The label goes when the pane is too narrow for it; the icon and tooltip stay.
+            claudeStageButton.Text = "Smart stage";
+            int smartWidth = claudeStageButton.PreferredWidth;
+            int leftEdge = (changesCountChip.Visible ? changesCountChip.Right : changesTitleLabel.Right) + 8;
+            if (stageAllButton.Left - 4 - smartWidth < leftEdge)
+            {
+                claudeStageButton.Text = string.Empty;
+                smartWidth = 28;
+            }
+            claudeStageButton.SetBounds(stageAllButton.Left - 4 - smartWidth, 8, smartWidth, 28);
 
             stageAllButton.Enabled = _status.Unstaged.Count > 0;
             bool canAsk = _status.Unstaged.Any(c => c.Kind != FileChangeKind.Conflicted);

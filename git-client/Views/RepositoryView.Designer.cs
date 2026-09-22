@@ -1095,9 +1095,10 @@
                 "ntColor\" d=\"M19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z\"/></svg>";
             this.claudeStageButton.Location = new System.Drawing.Point(270, 8);
             this.claudeStageButton.Name = "claudeStageButton";
-            this.claudeStageButton.PaddingX = 7;
-            this.claudeStageButton.Size = new System.Drawing.Size(28, 28);
+            this.claudeStageButton.Gap = 7;
+            this.claudeStageButton.Size = new System.Drawing.Size(110, 28);
             this.claudeStageButton.TabIndex = 4;
+            this.claudeStageButton.Text = "Smart stage";
             this.claudeStageButton.ToolTipText = "Stage with Claude: describe what to stage, or split everything into commits";
             this.claudeStageButton.Click += new System.EventHandler(this.claudeStageButton_Click);
             //
