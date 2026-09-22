@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -442,8 +442,13 @@ namespace GitClient.Views
             overflowButton.SetBounds(right - 28, 8, 28, 28);
             stageAllButton.Width = stageAllButton.PreferredWidth;
             stageAllButton.Left = right - 28 - 4 - stageAllButton.Width;
+            claudeStageButton.SetBounds(stageAllButton.Left - 4 - 28, 8, 28, 28);
 
             stageAllButton.Enabled = _status.Unstaged.Count > 0;
+            bool canAsk = _status.Unstaged.Any(c => c.Kind != FileChangeKind.Conflicted);
+            claudeStageButton.Enabled = canAsk;
+            claudeStageItem.Enabled = canAsk;
+            claudeSplitItem.Enabled = canAsk;
             unstageAllItem.Enabled = _status.Staged.Count > 0;
             discardAllItem.Enabled = _status.HasChanges;
             stashSelectedItem.Enabled = _status.HasChanges;
@@ -1867,6 +1872,35 @@ namespace GitClient.Views
 
         private async void stageAllButton_Click(object sender, EventArgs e) =>
             await ExecuteAsync("Staging all changes...", () => _repository.StageAllAsync());
+
+        private void claudeStageButton_Click(object sender, EventArgs e) => ShowClaudeStageDialog(false);
+
+        private void claudeStageItem_Click(object sender, EventArgs e) => ShowClaudeStageDialog(false);
+
+        private void claudeSplitItem_Click(object sender, EventArgs e) => ShowClaudeStageDialog(true);
+
+        private async void ShowClaudeStageDialog(bool split)
+        {
+            if (_repository == null || _busy) return;
+            var executable = ClaudeCommitComposer.FindExecutable(AppSettings.Current.ClaudeExecutable);
+            if (executable == null)
+            {
+                Dialogs.Warning(this, "Claude Code",
+                    "The Claude Code CLI was not found.\n\nInstall it, or set the path to claude.exe in Settings.");
+                return;
+            }
+            bool changed;
+            using (var dialog = new ClaudeStageDialog(_repository, _state != RepositoryState.None, executable) { StartWithSplit = split })
+            {
+                dialog.ShowDialog(FindForm());
+                changed = dialog.Changed;
+            }
+            if (changed)
+            {
+                statusMessageLabel.Text = split ? "Commits created from Claude's split." : "Staged the changes Claude picked.";
+                await RefreshAsync();
+            }
+        }
 
         private async void unstageAllItem_Click(object sender, EventArgs e) =>
             await ExecuteAsync("Unstaging all changes...", () => _repository.UnstageAllAsync());

@@ -42,6 +42,8 @@
             this.unstageAllItem = new ModernWinForms.ModernContextMenuItem();
             this.discardAllItem = new ModernWinForms.ModernContextMenuItem();
             this.stashSelectedItem = new ModernWinForms.ModernContextMenuItem();
+            this.claudeStageItem = new ModernWinForms.ModernContextMenuItem();
+            this.claudeSplitItem = new ModernWinForms.ModernContextMenuItem();
             this.refreshItem = new ModernWinForms.ModernContextMenuItem();
             this.editIgnoreItem = new ModernWinForms.ModernContextMenuItem();
             this.remotesItem = new ModernWinForms.ModernContextMenuItem();
@@ -109,6 +111,7 @@
             this.changesTitleLabel = new GitClient.Controls.TextLabel();
             this.changesCountChip = new GitClient.Controls.Chip();
             this.stageAllButton = new GitClient.Controls.CommandButton();
+            this.claudeStageButton = new GitClient.Controls.CommandButton();
             this.overflowButton = new GitClient.Controls.CommandButton();
             this.composerCard = new GitClient.Controls.SurfacePanel();
             this.commitToLabel = new GitClient.Controls.TextLabel();
@@ -242,6 +245,8 @@
             //
             // overflowMenu
             //
+            this.overflowMenu.Items.Add(this.claudeStageItem);
+            this.overflowMenu.Items.Add(this.claudeSplitItem);
             this.overflowMenu.Items.Add(this.unstageAllItem);
             this.overflowMenu.Items.Add(this.discardAllItem);
             this.overflowMenu.Items.Add(this.stashSelectedItem);
@@ -251,8 +256,19 @@
             this.overflowMenu.Items.Add(this.githubAccountItem);
             this.overflowMenu.Items.Add(this.refreshItem);
             //
+            // claudeStageItem
+            //
+            this.claudeStageItem.Text = "Stage with Claude...";
+            this.claudeStageItem.Click += new System.EventHandler(this.claudeStageItem_Click);
+            //
+            // claudeSplitItem
+            //
+            this.claudeSplitItem.Text = "Split into commits with Claude...";
+            this.claudeSplitItem.Click += new System.EventHandler(this.claudeSplitItem_Click);
+            //
             // unstageAllItem
             //
+            this.unstageAllItem.BeginGroup = true;
             this.unstageAllItem.Text = "Unstage all";
             this.unstageAllItem.Click += new System.EventHandler(this.unstageAllItem_Click);
             //
@@ -1027,6 +1043,7 @@
             this.changesHeader.Controls.Add(this.changesTitleLabel);
             this.changesHeader.Controls.Add(this.changesCountChip);
             this.changesHeader.Controls.Add(this.stageAllButton);
+            this.changesHeader.Controls.Add(this.claudeStageButton);
             this.changesHeader.Controls.Add(this.overflowButton);
             this.changesHeader.CornerRadius = 0;
             this.changesHeader.Dock = System.Windows.Forms.DockStyle.Top;
@@ -1067,6 +1084,22 @@
             this.stageAllButton.TabIndex = 2;
             this.stageAllButton.Text = "Stage all";
             this.stageAllButton.Click += new System.EventHandler(this.stageAllButton_Click);
+            //
+            // claudeStageButton
+            //
+            this.claudeStageButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.claudeStageButton.IconRole = GitClient.Controls.TextRole.Accent;
+            this.claudeStageButton.IconSize = 14;
+            this.claudeStageButton.IconSvg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path fill=\"currentColor" +
+                "\" d=\"M12 2l2.2 6.3 6.3 2.2-6.3 2.2L12 19l-2.2-6.3-6.3-2.2 6.3-2.2z\"/><path fill=\"curre" +
+                "ntColor\" d=\"M19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z\"/></svg>";
+            this.claudeStageButton.Location = new System.Drawing.Point(270, 8);
+            this.claudeStageButton.Name = "claudeStageButton";
+            this.claudeStageButton.PaddingX = 7;
+            this.claudeStageButton.Size = new System.Drawing.Size(28, 28);
+            this.claudeStageButton.TabIndex = 4;
+            this.claudeStageButton.ToolTipText = "Stage with Claude: describe what to stage, or split everything into commits";
+            this.claudeStageButton.Click += new System.EventHandler(this.claudeStageButton_Click);
             //
             // overflowButton
             //
@@ -1431,6 +1464,9 @@
         private GitClient.Controls.TextLabel changesTitleLabel;
         private GitClient.Controls.Chip changesCountChip;
         private GitClient.Controls.CommandButton stageAllButton;
+        private GitClient.Controls.CommandButton claudeStageButton;
+        private ModernWinForms.ModernContextMenuItem claudeStageItem;
+        private ModernWinForms.ModernContextMenuItem claudeSplitItem;
         private GitClient.Controls.CommandButton overflowButton;
         private GitClient.Controls.SurfacePanel conflictBanner;
         private GitClient.Controls.TextLabel conflictIcon;
