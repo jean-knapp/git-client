@@ -116,6 +116,12 @@
     <Compile Include="Forms\CloneDialog.Designer.cs">
       <DependentUpon>CloneDialog.cs</DependentUpon>
     </Compile>
+    <Compile Include="Forms\ClaudeStageDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\ClaudeStageDialog.Designer.cs">
+      <DependentUpon>ClaudeStageDialog.cs</DependentUpon>
+    </Compile>
     <Compile Include="Forms\GitIgnoreDialog.cs">
       <SubType>Form</SubType>
     </Compile>
