@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace GitClient.Git
 {
     /// <summary>High-level, asynchronous git operations for one working directory.</summary>
-    public sealed class GitRepository
+    public sealed partial class GitRepository
     {
         /// <summary>The well-known empty tree, used to diff a root commit.</summary>
         private const string EmptyTreeSha = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";

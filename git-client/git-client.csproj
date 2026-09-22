@@ -174,6 +174,7 @@
     <Compile Include="Git\GitRepository.cs" />
     <Compile Include="Git\GitResult.cs" />
     <Compile Include="Git\GitRunner.cs" />
+    <Compile Include="Git\GitRepository.Staging.cs" />
     <Compile Include="Git\Models.cs" />
     <Compile Include="Graph\GraphLayout.cs" />
     <Compile Include="Program.cs" />
