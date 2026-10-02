@@ -384,9 +384,13 @@ namespace GitClient.Views
             pushButton.BadgeText = _status.Ahead > 0 ? _status.Ahead.ToString() : null;
             pullButton.BadgeText = _status.Behind > 0 ? _status.Behind.ToString() : null;
             pushButton.Enabled = !_status.IsDetached;
-            stashPopItem.Enabled = _stashes.Count > 0;
-            stashApplyItem.Enabled = _stashes.Count > 0;
-            stashDropItem.Enabled = _stashes.Count > 0;
+            var here = StashesOn(_status.Branch);
+            branchButton.BadgeText = here.Count > 0 ? here.Count.ToString() : null;
+            branchButton.ToolTipText = here.Count > 0
+                ? Plural(here.Count, "stash") + " saved on " + _status.Branch + ". Open the Stash menu to apply one."
+                : null;
+            RebuildStashMenu();
+            NoteStashesAfterSwitch();
             scopeButton.Text = _allBranches ? "All branches" : "This branch";
             scopeButton.Width = scopeButton.PreferredWidth;
             scopeButton.Left = historyHeader.ClientSize.Width - 12 - scopeButton.Width;
@@ -527,7 +531,11 @@ namespace GitClient.Views
             statusUpstreamLabel.Width = Math.Max(40, statusUpstreamLabel.PreferredWidth + 4);
 
             var counts = historyList.LoadedCount + " commits loaded";
-            if (_stashes.Count > 0) counts += " · " + _stashes.Count + " stash" + (_stashes.Count == 1 ? string.Empty : "es");
+            if (_stashes.Count > 0)
+            {
+                int here = StashesOn(_status.Branch).Count;
+                counts += " · " + Plural(_stashes.Count, "stash") + (here > 0 && here < _stashes.Count ? " (" + here + " on this branch)" : here > 0 ? " on this branch" : string.Empty);
+            }
             statusCountLabel.Text = counts;
             statusCountLabel.Left = statusUpstreamLabel.Right + 16;
             statusCountLabel.Width = Math.Max(40, statusCountLabel.PreferredWidth + 4);
@@ -787,7 +795,7 @@ namespace GitClient.Views
             foreach (var branch in _refs.Where(r => r.Kind == RefKind.LocalBranch).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase))
             {
                 var captured = branch;
-                var item = menu.Items.Add(branch.Name + Track(branch));
+                var item = menu.Items.Add(branch.Name + Track(branch) + StashNote(branch.Name));
                 item.SvgIcon = Icons.Laptop;
                 item.Checkable = true;
                 item.Checked = branch.Name == _status.Branch;
@@ -815,6 +823,13 @@ namespace GitClient.Views
             create.Click += (s, a) => CreateBranchCommand();
 
             menu.Show(branchButton, branchButton.PointToScreen(new Point(0, branchButton.Height + 2)));
+        }
+
+        /// <summary>"   · 2 stashes" after a branch that has some.</summary>
+        private string StashNote(string branch)
+        {
+            int count = StashesOn(branch).Count;
+            return count == 0 ? string.Empty : "   · " + Plural(count, "stash");
         }
 
         private static string Track(RefInfo branch)
@@ -1195,35 +1210,118 @@ namespace GitClient.Views
             }
         }
 
-        private async void stashPopItem_Click(object sender, EventArgs e)
+        // ------------------------------------------------------------------ stashes by branch
+
+        /// <summary>The stashes made on <paramref name="branch"/>, newest first.</summary>
+        private List<StashInfo> StashesOn(string branch) =>
+            branch == null ? new List<StashInfo>() : _stashes.Where(s => string.Equals(s.Branch, branch, StringComparison.Ordinal)).ToList();
+
+        private static string Plural(int count, string noun) =>
+            count + " " + noun + (count == 1 ? string.Empty : noun.EndsWith("sh", StringComparison.Ordinal) ? "es" : "s");
+
+        private readonly List<ModernContextMenuItem> _stashItems = new List<ModernContextMenuItem>();
+
+        /// <summary>
+        /// Lists every stash under the Stash button: this branch's first, then the other branches'
+        /// with their branch name, each with Apply, Pop and Drop.
+        /// </summary>
+        private void RebuildStashMenu()
         {
-            if (_stashes.Count == 0) return;
-            await ExecuteAsync("Popping stash...", async () =>
+            foreach (var item in _stashItems)
             {
-                var result = await _repository.StashPopAsync(0);
-                ReportResult(result, "Pop stash", "Stash popped.");
+                stashMenu.Items.Remove(item);
+                item.Dispose();
+            }
+            _stashItems.Clear();
+
+            var here = StashesOn(_status.Branch);
+            var elsewhere = _stashes.Where(s => !here.Contains(s)).ToList();
+            if (_stashes.Count == 0)
+            {
+                AddStashHeader("No stashes");
+                return;
+            }
+            if (here.Count > 0)
+            {
+                AddStashHeader("On " + _status.Branch);
+                foreach (var stash in here) AddStashItem(stash, false);
+            }
+            if (elsewhere.Count > 0)
+            {
+                AddStashHeader(here.Count > 0 ? "On other branches" : _status.Branch != null ? "None on " + _status.Branch + " · on other branches" : "Stashes");
+                foreach (var stash in elsewhere) AddStashItem(stash, true);
+            }
+        }
+
+        private void AddStashHeader(string text)
+        {
+            var header = new ModernContextMenuItem { Text = text, Enabled = false, BeginGroup = true };
+            stashMenu.Items.Add(header);
+            _stashItems.Add(header);
+        }
+
+        private void AddStashItem(StashInfo stash, bool showBranch)
+        {
+            var what = string.IsNullOrWhiteSpace(stash.Description) ? stash.Selector : stash.Description.Trim();
+            if (what.Length > 60) what = what.Substring(0, 60) + "…";
+            var item = new ModernContextMenuItem
+            {
+                Text = (showBranch ? (stash.Branch ?? "detached HEAD") + "  ·  " : string.Empty) + what + "   " + HistoryListControl.Relative(stash.Date),
+                SvgIcon = Icons.Stash,
+            };
+            var apply = item.SubItems.Add("Apply");
+            apply.Click += async (s, a) => await ApplyStashAsync(stash, false);
+            var pop = item.SubItems.Add("Pop (apply, then drop)");
+            pop.SvgIcon = Icons.Pop;
+            pop.Click += async (s, a) => await ApplyStashAsync(stash, true);
+            var drop = item.SubItems.Add("Drop...");
+            drop.SvgIcon = Icons.Trash;
+            drop.BeginGroup = true;
+            drop.Click += async (s, a) => await DropStashAsync(stash);
+            stashMenu.Items.Add(item);
+            _stashItems.Add(item);
+        }
+
+        /// <summary>Stashes shift index as others are dropped, so each action finds its stash again by commit.</summary>
+        private int CurrentIndexOf(StashInfo stash) => _stashes.FindIndex(s => s.Sha == stash.Sha);
+
+        private async Task ApplyStashAsync(StashInfo stash, bool pop)
+        {
+            int index = CurrentIndexOf(stash);
+            if (index < 0) return;
+            var from = stash.Branch != null && stash.Branch != _status.Branch ? " (made on " + stash.Branch + ")" : string.Empty;
+            await ExecuteAsync(pop ? "Popping stash..." : "Applying stash...", async () =>
+            {
+                var result = pop ? await _repository.StashPopAsync(index) : await _repository.StashApplyAsync(index);
+                ReportResult(result, pop ? "Pop stash" : "Apply stash", (pop ? "Stash popped" : "Stash applied") + from + ".");
             });
         }
 
-        private async void stashApplyItem_Click(object sender, EventArgs e)
+        private async Task DropStashAsync(StashInfo stash)
         {
-            if (_stashes.Count == 0) return;
-            await ExecuteAsync("Applying stash...", async () =>
-            {
-                var result = await _repository.StashApplyAsync(0);
-                ReportResult(result, "Apply stash", "Stash applied.");
-            });
-        }
-
-        private async void stashDropItem_Click(object sender, EventArgs e)
-        {
-            if (_stashes.Count == 0) return;
-            if (!Dialogs.Confirm(this, "Drop stash", "Drop " + _stashes[0].Selector + " (" + _stashes[0].Message + ")?", "Drop")) return;
+            int index = CurrentIndexOf(stash);
+            if (index < 0) return;
+            var where = stash.Branch != null ? " from " + stash.Branch : string.Empty;
+            if (!Dialogs.Confirm(this, "Drop stash", "Drop the stash" + where + "?\n\n" + stash.Description + "\n\nIts changes are deleted; this cannot be undone.", "Drop")) return;
             await ExecuteAsync("Dropping stash...", async () =>
             {
-                var result = await _repository.StashDropAsync(0);
+                var result = await _repository.StashDropAsync(index);
                 ReportResult(result, "Drop stash", "Stash dropped.");
             });
+        }
+
+        private string _lastBranch;
+
+        /// <summary>After switching to a branch that has stashes, says so.</summary>
+        private void NoteStashesAfterSwitch()
+        {
+            var branch = _status.Branch;
+            if (branch != null && _lastBranch != null && branch != _lastBranch)
+            {
+                int count = StashesOn(branch).Count;
+                if (count > 0) statusMessageLabel.Text = branch + " has " + Plural(count, "stash") + " saved. Open the Stash menu to apply one.";
+            }
+            _lastBranch = branch;
         }
 
         private void filterBox_TextChanged(object sender, EventArgs e)
@@ -2104,6 +2202,11 @@ namespace GitClient.Views
             catch (OperationCanceledException)
             {
                 statusMessageLabel.Text = "Composition cancelled.";
+            }
+            catch (ClaudeSignInRequiredException ex)
+            {
+                statusMessageLabel.Text = "Claude Code is not signed in.";
+                ClaudeAuth.OfferSignIn(FindForm(), executable, ex.Message, text => { if (!IsDisposed) statusMessageLabel.Text = text; });
             }
             catch (Exception ex)
             {

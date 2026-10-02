@@ -205,6 +205,12 @@ namespace GitClient.Git
         public string Message { get; set; }
         public DateTimeOffset Date { get; set; }
 
+        /// <summary>The branch the stash was made on; null when it was made on a detached HEAD.</summary>
+        public string Branch { get; set; }
+
+        /// <summary>What was stashed, without git's "WIP on branch:" prefix: the message given, or the commit it was based on.</summary>
+        public string Description { get; set; }
+
         public override string ToString() => Selector + ": " + Message;
     }
 

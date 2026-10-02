@@ -26,11 +26,12 @@
             this.tabExplorerItem = new ModernWinForms.ModernContextMenuItem();
             this.tabTerminalItem = new ModernWinForms.ModernContextMenuItem();
             this.addMenu = new ModernWinForms.ModernContextMenu(this.components);
+            this.openRecentItem = new ModernWinForms.ModernContextMenuItem();
             this.openRepositoryItem = new ModernWinForms.ModernContextMenuItem();
             this.cloneRepositoryItem = new ModernWinForms.ModernContextMenuItem();
             this.initRepositoryItem = new ModernWinForms.ModernContextMenuItem();
             this.settingsItem = new ModernWinForms.ModernContextMenuItem();
-            this.tabStrip = new GitClient.Controls.RepositoryTabStrip();
+            this.tabStrip = new ModernWinForms.ModernTabStrip();
             this.hostPanel = new GitClient.Controls.SurfacePanel();
             this.welcomeView = new GitClient.Views.WelcomeView();
             this.hostPanel.SuspendLayout();
@@ -73,6 +74,7 @@
             // addMenu
             //
             this.addMenu.Items.Add(this.openRepositoryItem);
+            this.addMenu.Items.Add(this.openRecentItem);
             this.addMenu.Items.Add(this.cloneRepositoryItem);
             this.addMenu.Items.Add(this.initRepositoryItem);
             this.addMenu.Items.Add(this.settingsItem);
@@ -84,6 +86,10 @@
                 "\" d=\"M3 5h6l2 2h10v12H3z\"/></svg>";
             this.openRepositoryItem.Text = "Open a repository...";
             this.openRepositoryItem.Click += new System.EventHandler(this.openRepositoryItem_Click);
+            //
+            // openRecentItem
+            //
+            this.openRecentItem.Text = "Open recent";
             //
             // cloneRepositoryItem
             //
@@ -119,9 +125,10 @@
             this.tabStrip.Size = new System.Drawing.Size(1400, 38);
             this.tabStrip.TabIndex = 0;
             this.tabStrip.SelectedIndexChanged += new System.EventHandler(this.tabStrip_SelectedIndexChanged);
-            this.tabStrip.TabCloseRequested += new System.EventHandler<GitClient.Controls.TabEventArgs>(this.tabStrip_TabCloseRequested);
-            this.tabStrip.TabContextMenuRequested += new System.EventHandler<GitClient.Controls.TabEventArgs>(this.tabStrip_TabContextMenuRequested);
+            this.tabStrip.TabCloseRequested += new System.EventHandler<ModernWinForms.ModernTabStripEventArgs>(this.tabStrip_TabCloseRequested);
+            this.tabStrip.TabContextMenuRequested += new System.EventHandler<ModernWinForms.ModernTabStripEventArgs>(this.tabStrip_TabContextMenuRequested);
             this.tabStrip.AddRequested += new System.EventHandler(this.tabStrip_AddRequested);
+            this.tabStrip.TabMoved += new System.EventHandler<ModernWinForms.ModernTabMovedEventArgs>(this.tabStrip_TabMoved);
             //
             // hostPanel
             //
@@ -172,10 +179,11 @@
         private ModernWinForms.ModernContextMenuItem tabTerminalItem;
         private ModernWinForms.ModernContextMenu addMenu;
         private ModernWinForms.ModernContextMenuItem openRepositoryItem;
+        private ModernWinForms.ModernContextMenuItem openRecentItem;
         private ModernWinForms.ModernContextMenuItem cloneRepositoryItem;
         private ModernWinForms.ModernContextMenuItem initRepositoryItem;
         private ModernWinForms.ModernContextMenuItem settingsItem;
-        private GitClient.Controls.RepositoryTabStrip tabStrip;
+        private ModernWinForms.ModernTabStrip tabStrip;
         private GitClient.Controls.SurfacePanel hostPanel;
         private GitClient.Views.WelcomeView welcomeView;
     }

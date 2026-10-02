@@ -86,9 +86,6 @@
     <Compile Include="Controls\RecentListControl.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Include="Controls\RepositoryTabStrip.cs">
-      <SubType>Component</SubType>
-    </Compile>
     <Compile Include="Controls\SegmentedControl.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -188,6 +185,7 @@
     <Compile Include="Services\AndroidAppIcon.cs" />
     <Compile Include="Services\AppSettings.cs" />
     <Compile Include="Services\ClaudeCommitComposer.cs" />
+    <Compile Include="Services\ClaudeAuth.cs" />
     <Compile Include="Services\ClaudeStagePlanner.cs" />
     <Compile Include="Services\CredentialHelper.cs" />
     <Compile Include="Services\FolderPicker.cs" />

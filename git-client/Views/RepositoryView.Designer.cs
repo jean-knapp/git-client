@@ -35,9 +35,6 @@
             this.stashMenu = new ModernWinForms.ModernContextMenu(this.components);
             this.stashPushItem = new ModernWinForms.ModernContextMenuItem();
             this.stashPushUntrackedItem = new ModernWinForms.ModernContextMenuItem();
-            this.stashPopItem = new ModernWinForms.ModernContextMenuItem();
-            this.stashApplyItem = new ModernWinForms.ModernContextMenuItem();
-            this.stashDropItem = new ModernWinForms.ModernContextMenuItem();
             this.overflowMenu = new ModernWinForms.ModernContextMenu(this.components);
             this.unstageAllItem = new ModernWinForms.ModernContextMenuItem();
             this.discardAllItem = new ModernWinForms.ModernContextMenuItem();
@@ -213,9 +210,6 @@
             //
             this.stashMenu.Items.Add(this.stashPushItem);
             this.stashMenu.Items.Add(this.stashPushUntrackedItem);
-            this.stashMenu.Items.Add(this.stashPopItem);
-            this.stashMenu.Items.Add(this.stashApplyItem);
-            this.stashMenu.Items.Add(this.stashDropItem);
             //
             // stashPushItem
             //
@@ -226,22 +220,6 @@
             //
             this.stashPushUntrackedItem.Text = "Stash including untracked...";
             this.stashPushUntrackedItem.Click += new System.EventHandler(this.stashPushUntrackedItem_Click);
-            //
-            // stashPopItem
-            //
-            this.stashPopItem.BeginGroup = true;
-            this.stashPopItem.Text = "Pop latest stash";
-            this.stashPopItem.Click += new System.EventHandler(this.stashPopItem_Click);
-            //
-            // stashApplyItem
-            //
-            this.stashApplyItem.Text = "Apply latest stash";
-            this.stashApplyItem.Click += new System.EventHandler(this.stashApplyItem_Click);
-            //
-            // stashDropItem
-            //
-            this.stashDropItem.Text = "Drop latest stash";
-            this.stashDropItem.Click += new System.EventHandler(this.stashDropItem_Click);
             //
             // overflowMenu
             //
@@ -1398,9 +1376,6 @@
         private ModernWinForms.ModernContextMenu stashMenu;
         private ModernWinForms.ModernContextMenuItem stashPushItem;
         private ModernWinForms.ModernContextMenuItem stashPushUntrackedItem;
-        private ModernWinForms.ModernContextMenuItem stashPopItem;
-        private ModernWinForms.ModernContextMenuItem stashApplyItem;
-        private ModernWinForms.ModernContextMenuItem stashDropItem;
         private ModernWinForms.ModernContextMenu overflowMenu;
         private ModernWinForms.ModernContextMenuItem unstageAllItem;
         private ModernWinForms.ModernContextMenuItem discardAllItem;

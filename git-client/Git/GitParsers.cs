@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace GitClient.Git
@@ -254,9 +255,32 @@ namespace GitClient.Git
                 if (line.Length == 0) continue;
                 var f = line.Split(FieldSeparator);
                 if (f.Length < 3) continue;
-                list.Add(new StashInfo { Index = index++, Sha = f[0], Message = f[1], Date = ParseDate(f[2]) });
+                var stash = new StashInfo { Index = index++, Sha = f[0], Message = f[1], Date = ParseDate(f[2]), Description = f[1] };
+                // git writes "WIP on <branch>: <sha> <subject>", or "On <branch>: <message>" when a
+                // message was given. Branch names cannot contain ':', so the first ": " ends the name.
+                var match = StashSubject.Match(f[1]);
+                if (match.Success)
+                {
+                    var branch = match.Groups[2].Value;
+                    stash.Branch = branch == "(no branch)" ? null : branch;
+                    // An unnamed stash only records the commit it was based on, so it says so
+                    // rather than passing that commit's subject off as what was stashed.
+                    stash.Description = match.Groups[1].Value == "WIP on "
+                        ? "Unnamed, on top of \"" + StripLeadingSha(match.Groups[3].Value) + "\""
+                        : match.Groups[3].Value;
+                }
+                list.Add(stash);
             }
             return list;
+        }
+
+        private static readonly Regex StashSubject = new Regex(@"^(WIP on |On )(.+?): (.*)$", RegexOptions.Compiled);
+
+        /// <summary>"a1b2c3d Fix the login" → "Fix the login": what an unnamed stash was based on.</summary>
+        private static string StripLeadingSha(string text)
+        {
+            int space = text.IndexOf(' ');
+            return space > 0 && space <= 40 && text.Substring(0, space).All(Uri.IsHexDigit) ? text.Substring(space + 1) : text;
         }
 
         private static readonly Regex HunkRegex = new Regex(@"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", RegexOptions.Compiled);

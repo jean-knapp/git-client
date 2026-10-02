@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -41,13 +41,34 @@ namespace GitClient.Forms
                 GitRunner.GitExecutable = settings.GitExecutable;
             }
             ApplyTitleIcon();
+            ApplyTabStripTheme();
         }
 
         // ------------------------------------------------------------------ theme
 
+        /// <summary>The library tab strip in this app's palette and type.</summary>
+        private void ApplyTabStripTheme()
+        {
+            var p = Theme.Palette;
+            var surface = p.Background;
+            tabStrip.Font = Fonts.Ui(13f);
+            var c = tabStrip.Colors;
+            c.BackColor = surface;
+            c.TabForeColor = p.Foreground2;
+            c.SelectedForeColor = p.Foreground;
+            c.SubtitleForeColor = p.Foreground3;
+            c.SelectedBackColor = p.FillOn(surface);
+            c.SelectedBorderColor = p.StrokeOn(surface);
+            c.HoverBackColor = p.HoverOn(surface);
+            c.ButtonHoverBackColor = p.Fill2On(surface);
+            c.GlyphColor = p.Foreground3;
+            c.AccentColor = p.Accent;
+        }
+
         private void OnThemeChanged(object sender, EventArgs e)
         {
             Theme.Apply(skin);
+            ApplyTabStripTheme();
             ApplyTitleIcon();
             Invalidate(true);
         }
@@ -249,15 +270,14 @@ namespace GitClient.Forms
 
         private void RefreshTabs()
         {
-            var tabs = _views.Select(v => new RepositoryTab
+            var tabs = _views.Select(v => new ModernTabStripItem
             {
                 Icon = _tabIcons.TryGetValue(v, out var icon) ? icon : null,
-                Title = v.TabTitle,
-                Branch = v.TabBranch,
-                ToolTip = v.TabToolTip,
+                Text = v.TabTitle,
+                Subtitle = v.TabBranch,
                 Tag = v,
             });
-            tabStrip.Refresh(tabs, _activeView == null ? 0 : _views.IndexOf(_activeView));
+            tabStrip.SetItems(tabs, _activeView == null ? 0 : _views.IndexOf(_activeView));
         }
 
         /// <summary>Looks for the project's icon in the repository, off the UI thread, and shows it on the tab.</summary>
@@ -300,7 +320,7 @@ namespace GitClient.Forms
         {
             if (index < 0 || index >= _views.Count) return;
             var view = _views[index];
-            tabStrip.Refresh(Enumerable.Empty<RepositoryTab>(), -1);
+            tabStrip.SetItems(Enumerable.Empty<ModernTabStripItem>(), -1);
             _views.RemoveAt(index);
             if (_tabIcons.TryGetValue(view, out var icon))
             {
@@ -361,9 +381,19 @@ namespace GitClient.Forms
 
         private void tabStrip_SelectedIndexChanged(object sender, EventArgs e) => ActivateView(tabStrip.SelectedIndex);
 
-        private void tabStrip_TabCloseRequested(object sender, TabEventArgs e) => CloseTab(e.Index);
+        private void tabStrip_TabCloseRequested(object sender, ModernTabStripEventArgs e) => CloseTab(e.Index);
 
-        private void tabStrip_TabContextMenuRequested(object sender, TabEventArgs e)
+        /// <summary>A tab was dragged to a new place: its repository moves with it, and so does the order saved for next time.</summary>
+        private void tabStrip_TabMoved(object sender, ModernTabMovedEventArgs e)
+        {
+            if (e.FromIndex < 0 || e.FromIndex >= _views.Count || e.ToIndex < 0 || e.ToIndex >= _views.Count) return;
+            var view = _views[e.FromIndex];
+            _views.RemoveAt(e.FromIndex);
+            _views.Insert(e.ToIndex, view);
+            RefreshTabs();
+        }
+
+        private void tabStrip_TabContextMenuRequested(object sender, ModernTabStripEventArgs e)
         {
             _tabMenuIndex = e.Index;
             tabCloseOthersItem.Enabled = _views.Count > 1;
@@ -372,7 +402,43 @@ namespace GitClient.Forms
 
         private void tabStrip_AddRequested(object sender, EventArgs e)
         {
+            BuildRecentMenu();
             addMenu.Show(tabStrip, Cursor.Position);
+        }
+
+        /// <summary>
+        /// Fills "Open recent" with the recent repositories still on disk, so a tab can be closed
+        /// and brought back later. One that is already open goes to its tab.
+        /// </summary>
+        private void BuildRecentMenu()
+        {
+            var old = openRecentItem.SubItems.ToList();
+            openRecentItem.SubItems.Clear();
+            foreach (var item in old) item.Dispose();
+
+            var recent = AppSettings.Current.RecentRepositories.Where(Directory.Exists).Take(15).ToList();
+            foreach (var path in recent)
+            {
+                var target = path;
+                bool open = _views.Any(v => string.Equals(v.RepositoryPath, path, StringComparison.OrdinalIgnoreCase));
+                var name = Path.GetFileName(path.TrimEnd('\\', '/'));
+                var item = new ModernContextMenuItem
+                {
+                    Text = (string.IsNullOrEmpty(name) ? path : name) + "   " + ShortPath(path) + (open ? "   (open)" : string.Empty),
+                    SvgIcon = openRepositoryItem.SvgIcon,
+                };
+                item.Click += async (s, args) => await OpenRepositoryAsync(target, true);
+                openRecentItem.SubItems.Add(item);
+            }
+            if (recent.Count == 0) openRecentItem.SubItems.Add(new ModernContextMenuItem { Text = "No recent repositories", Enabled = false });
+            openRecentItem.Enabled = recent.Count > 0;
+        }
+
+        /// <summary>The path with the profile folder written as <c>~</c>.</summary>
+        private static string ShortPath(string path)
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return path.StartsWith(home, StringComparison.OrdinalIgnoreCase) ? "~" + path.Substring(home.Length) : path;
         }
 
         private void tabCloseItem_Click(object sender, EventArgs e) => CloseTab(_tabMenuIndex);

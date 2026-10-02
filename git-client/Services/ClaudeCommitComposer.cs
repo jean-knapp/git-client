@@ -136,6 +136,22 @@ namespace GitClient.Services
 
         internal static async Task<string> RunAsync(string executable, IList<string> args, string workingDirectory, string stdin, CancellationToken cancellationToken)
         {
+            var result = await RunRawAsync(executable, args, workingDirectory, stdin, cancellationToken).ConfigureAwait(false);
+            if (result.ExitCode != 0)
+            {
+                var error = result.Error.Trim();
+                if (error.Length == 0) error = result.Output.Trim();
+                if (error.Length == 0) error = "claude exited with code " + result.ExitCode;
+                // Not signed in, or the sign-in expired: the caller can offer to sign in.
+                if (ClaudeAuth.LooksLikeSignInProblem(result.Error + "\n" + result.Output)) throw new ClaudeSignInRequiredException(error);
+                throw new InvalidOperationException(error);
+            }
+            return result.Output;
+        }
+
+        /// <summary>Runs the CLI and returns its exit code and both streams, whatever the exit code.</summary>
+        internal static async Task<(int ExitCode, string Output, string Error)> RunRawAsync(string executable, IList<string> args, string workingDirectory, string stdin, CancellationToken cancellationToken)
+        {
             var psi = new ProcessStartInfo
             {
                 UseShellExecute = false,
@@ -184,14 +200,7 @@ namespace GitClient.Services
                 await Task.WhenAll(exit.Task, stdout, stderr, stdinTask).ConfigureAwait(false);
                 process.WaitForExit();
                 cancellationToken.ThrowIfCancellationRequested();
-                if (process.ExitCode != 0)
-                {
-                    var error = stderr.Result.Trim();
-                    if (error.Length == 0) error = stdout.Result.Trim();
-                    if (error.Length == 0) error = "claude exited with code " + process.ExitCode;
-                    throw new InvalidOperationException(error);
-                }
-                return stdout.Result;
+                return (process.ExitCode, stdout.Result, stderr.Result);
             }
         }
     }

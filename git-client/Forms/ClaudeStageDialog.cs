@@ -215,6 +215,11 @@ namespace GitClient.Forms
             {
                 askStatusLabel.Text = "Stopped.";
             }
+            catch (ClaudeSignInRequiredException ex)
+            {
+                askStatusLabel.Text = "Claude Code is not signed in.";
+                ClaudeAuth.OfferSignIn(this, _executable, ex.Message, text => { if (!IsDisposed) askStatusLabel.Text = text; });
+            }
             catch (Exception ex)
             {
                 if (token.IsCancellationRequested) askStatusLabel.Text = "Stopped.";
