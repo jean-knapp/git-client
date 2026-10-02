@@ -418,6 +418,19 @@ namespace GitClient.Git
             if (!result.Succeeded && result.ExitCode != 1) throw new GitException(result);
             var doc = GitParsers.ParseDiff(result.StandardOutput, change.Path);
             if (doc.IsEmpty && change.Kind == FileChangeKind.Conflicted) doc.Note = "Conflicted file. Resolve the conflict markers, then stage the file.";
+
+            // Every line "changed" but only its line ending: hundreds of identical-looking rows
+            // help nobody, so say what it is and how to get rid of it.
+            if (!change.Staged && change.Kind == FileChangeKind.Modified && doc.Additions > 0 && doc.Additions == doc.Deletions &&
+                (await LineEndingOnlyChangesAsync(new[] { change.Path }).ConfigureAwait(false)).Contains(change.Path))
+            {
+                int lines = doc.Additions;
+                doc.Lines.Clear();
+                doc.Note = "Only the line endings differ (CRLF / LF) on " + lines + " line" + (lines == 1 ? string.Empty : "s") + " - the content is the same.\n\n" +
+                           "The repository's .gitattributes stores this file as LF text, but it was committed with CRLF, so git sees a " +
+                           "difference that Discard cannot remove. Discard offers to fix it: the file is staged with normalized line " +
+                           "endings, and once that is committed the change is gone for good.";
+            }
             return doc;
         }
 
@@ -738,6 +751,31 @@ namespace GitClient.Git
                 args.Add(remote ?? "origin");
                 args.Add(branch ?? "HEAD");
             }
+            return RunAsync(new GitRunOptions { Progress = progress }, cancellationToken, args.ToArray());
+        }
+
+        /// <summary>
+        /// The remote and remote branch a local branch tracks (branch.&lt;name&gt;.remote / .merge);
+        /// nulls when it tracks nothing.
+        /// </summary>
+        public async Task<(string Remote, string Branch)> GetTrackingAsync(string branch)
+        {
+            var remote = await GetConfigAsync("branch." + branch + ".remote").ConfigureAwait(false);
+            var merge = await GetConfigAsync("branch." + branch + ".merge").ConfigureAwait(false);
+            const string Heads = "refs/heads/";
+            if (merge != null && merge.StartsWith(Heads, StringComparison.Ordinal)) merge = merge.Substring(Heads.Length);
+            return (remote, merge);
+        }
+
+        /// <summary>Pushes a local branch to a remote branch of any name: <c>git push remote local:remoteBranch</c>.</summary>
+        public Task<GitResult> PushToAsync(string remote, string localBranch, string remoteBranch, bool setUpstream, bool forceWithLease,
+            IProgress<string> progress, CancellationToken cancellationToken)
+        {
+            var args = new List<string> { "push", "--progress" };
+            if (forceWithLease) args.Add("--force-with-lease");
+            if (setUpstream) args.Add("--set-upstream");
+            args.Add(remote);
+            args.Add("refs/heads/" + localBranch + ":refs/heads/" + remoteBranch);
             return RunAsync(new GitRunOptions { Progress = progress }, cancellationToken, args.ToArray());
         }
 

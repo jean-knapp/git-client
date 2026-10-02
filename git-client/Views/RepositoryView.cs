@@ -792,10 +792,29 @@ namespace GitClient.Views
             var menu = new ModernContextMenu { EnableSearch = true };
             _dynamicMenu = menu;
 
+            // The actions come first: below a long list of remote branches they are out of reach.
+            var create = menu.Items.Add("New branch...");
+            create.SvgIcon = Icons.Plus;
+            create.Click += (s, a) => CreateBranchCommand();
+
+            var locals = _refs.Where(r => r.Kind == RefKind.LocalBranch).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            var delete = menu.Items.Add("Delete a branch");
+            delete.SvgIcon = Icons.Trash;
+            delete.Enabled = locals.Count > 1 || (locals.Count == 1 && locals[0].Name != _status.Branch);
+            foreach (var branch in locals)
+            {
+                var captured = branch;
+                bool current = branch.Name == _status.Branch;
+                var item = delete.SubItems.Add(branch.Name + (current ? "   (current: switches away first)" : string.Empty) + "...");
+                item.Click += async (s, a) => await DeleteBranchAsync(captured);
+            }
+
+            bool firstLocal = true;
             foreach (var branch in _refs.Where(r => r.Kind == RefKind.LocalBranch).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase))
             {
                 var captured = branch;
                 var item = menu.Items.Add(branch.Name + Track(branch) + StashNote(branch.Name));
+                if (firstLocal) { item.BeginGroup = true; firstLocal = false; }
                 item.SvgIcon = Icons.Laptop;
                 item.Checkable = true;
                 item.Checked = branch.Name == _status.Branch;
@@ -816,11 +835,6 @@ namespace GitClient.Views
                 item.Click += async (s, a) =>
                     await ExecuteAsync("Switching to " + captured.ShortName + "...", () => _repository.CheckoutRemoteBranchAsync(captured));
             }
-
-            var create = menu.Items.Add("New branch...");
-            create.SvgIcon = Icons.Plus;
-            create.BeginGroup = true;
-            create.Click += (s, a) => CreateBranchCommand();
 
             menu.Show(branchButton, branchButton.PointToScreen(new Point(0, branchButton.Height + 2)));
         }
@@ -921,15 +935,81 @@ namespace GitClient.Views
                 remote = remotes.Contains("origin") ? "origin" : remotes[0];
             }
             bool missingOnRemote = false;
+            bool namesDiffer = false;
             await ExecuteAsync("Pushing...", async () =>
             {
                 var result = await WithCredentialRetryAsync("Push",
                     () => _repository.PushAsync(remote, _status.Branch, needsUpstream, force, CreateProgress(), CancellationToken.None));
                 missingOnRemote = !result.Succeeded && LooksLikeMissingRepository(result.Message);
-                if (!missingOnRemote) ReportResult(result, "Push", "Push finished.");
+                namesDiffer = !result.Succeeded && LooksLikeUpstreamNameMismatch(result.Message);
+                if (!missingOnRemote && !namesDiffer) ReportResult(result, "Push", "Push finished.");
             });
 
             if (missingOnRemote) await OfferToCreateMissingRepositoryAsync(remote);
+            if (namesDiffer) await ChoosePushTargetAsync(force);
+        }
+
+        /// <summary>git's refusal under push.default=simple when the tracked branch has another name.</summary>
+        private static bool LooksLikeUpstreamNameMismatch(string message) =>
+            message != null && message.IndexOf("does not match", StringComparison.OrdinalIgnoreCase) >= 0 &&
+            message.IndexOf("upstream branch", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        /// <summary>
+        /// The branch tracks a remote branch of another name: asks where it should go instead of
+        /// showing git's advice, and does it.
+        /// </summary>
+        private async Task ChoosePushTargetAsync(bool force)
+        {
+            var local = _status.Branch;
+            var tracking = await _repository.GetTrackingAsync(local);
+            if (tracking.Remote == null || tracking.Branch == null)
+            {
+                Dialogs.Error(this, "Push", "Could not read which branch " + local + " tracks.");
+                return;
+            }
+            bool canRename = !await _repository.LocalBranchExistsAsync(tracking.Branch);
+
+            PushTarget target;
+            bool remember;
+            using (var dialog = new PushTargetDialog(local, tracking.Remote, tracking.Branch, canRename))
+            {
+                if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+                target = dialog.Target;
+                remember = dialog.Remember;
+            }
+
+            var tracked = tracking.Remote + "/" + tracking.Branch;
+            switch (target)
+            {
+                case PushTarget.TrackedBranch:
+                    if (remember) await _repository.SetConfigAsync("push.default", "upstream");
+                    await ExecuteAsync("Pushing to " + tracked + "...", async () =>
+                    {
+                        var result = await WithCredentialRetryAsync("Push",
+                            () => _repository.PushToAsync(tracking.Remote, local, tracking.Branch, false, force, CreateProgress(), CancellationToken.None));
+                        ReportResult(result, "Push", "Pushed to " + tracked + "." + (remember ? " Plain pushes go to the tracked branch from now on." : string.Empty));
+                    });
+                    break;
+
+                case PushTarget.SameName:
+                    await ExecuteAsync("Pushing to " + tracking.Remote + "/" + local + "...", async () =>
+                    {
+                        var result = await WithCredentialRetryAsync("Push",
+                            () => _repository.PushToAsync(tracking.Remote, local, local, true, force, CreateProgress(), CancellationToken.None));
+                        ReportResult(result, "Push", "Pushed to " + tracking.Remote + "/" + local + ", which " + local + " now tracks.");
+                    });
+                    break;
+
+                case PushTarget.RenameLocal:
+                    await ExecuteAsync("Renaming " + local + " to " + tracking.Branch + "...", () => _repository.RenameBranchAsync(local, tracking.Branch));
+                    await ExecuteAsync("Pushing to " + tracked + "...", async () =>
+                    {
+                        var result = await WithCredentialRetryAsync("Push",
+                            () => _repository.PushToAsync(tracking.Remote, tracking.Branch, tracking.Branch, false, force, CreateProgress(), CancellationToken.None));
+                        ReportResult(result, "Push", "Renamed to " + tracking.Branch + " and pushed to " + tracked + ".");
+                    });
+                    break;
+            }
         }
 
         /// <summary>
@@ -1565,7 +1645,6 @@ namespace GitClient.Views
 
                 var delete = menu.Items.Add("Delete " + reference.Name + "...");
                 delete.SvgIcon = Icons.Trash;
-                delete.Enabled = reference.Name != _status.Branch;
                 delete.Click += async (s, e) => await DeleteBranchAsync(reference);
             }
             else if (reference.Kind == RefKind.RemoteBranch)
@@ -1703,9 +1782,51 @@ namespace GitClient.Views
             }
         }
 
+        /// <summary>
+        /// Where to go before deleting the branch HEAD is on: main, master or develop when they
+        /// exist locally, otherwise the first other local branch; null when there is none.
+        /// </summary>
+        private string BranchToLeaveFor(string current)
+        {
+            var others = _refs.Where(r => r.Kind == RefKind.LocalBranch && r.Name != current).Select(r => r.Name).ToList();
+            foreach (var preferred in new[] { "main", "master", "develop" })
+            {
+                if (others.Contains(preferred)) return preferred;
+            }
+            return others.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
+        }
+
         private async Task DeleteBranchAsync(RefInfo branch)
         {
-            if (!Dialogs.Confirm(this, "Delete branch", "Delete local branch " + branch.Name + "?", "Delete")) return;
+            bool current = branch.Name == _status.Branch;
+            string leaveFor = current ? BranchToLeaveFor(branch.Name) : null;
+            if (current && leaveFor == null)
+            {
+                Dialogs.Information(this, "Delete branch", branch.Name + " is the only local branch, so there is nowhere to switch to first. Create or check out another branch, then delete it.");
+                return;
+            }
+
+            var message = "Delete local branch " + branch.Name + "?";
+            if (current)
+            {
+                message = "You are on " + branch.Name + ". Git cannot delete the branch you are on, so this switches to " + leaveFor +
+                          " first (uncommitted changes come along when they can), then deletes " + branch.Name + ".";
+            }
+            if (branch.Upstream != null) message += "\n\nIts remote branch " + branch.Upstream + " is not deleted.";
+            if (!Dialogs.Confirm(this, "Delete branch", message, current ? "Switch and delete" : "Delete")) return;
+
+            if (current)
+            {
+                bool switched = false;
+                await ExecuteAsync("Switching to " + leaveFor + "...", async () =>
+                {
+                    await _repository.CheckoutAsync(leaveFor);
+                    switched = true;
+                });
+                // A checkout that failed (conflicting changes) leaves the branch in place, deleted nothing.
+                if (!switched) return;
+            }
+
             await ExecuteAsync("Deleting branch...", async () =>
             {
                 try
@@ -1970,11 +2091,61 @@ namespace GitClient.Views
         private async Task DiscardAsync(List<FileChange> changes)
         {
             if (changes.Count == 0) return;
-            var message = changes.Count == 1
-                ? "Discard changes to " + changes[0].Path + "?"
-                : "Discard changes to these " + changes.Count + " files?";
-            if (!Dialogs.Confirm(this, "Discard changes", message + "\n\nThis cannot be undone.", "Discard")) return;
-            await ExecuteAsync("Discarding...", () => _repository.DiscardAsync(changes));
+
+            // Changes that are only line endings come straight back after a discard; they are
+            // dealt with on their own, and only the rest is discarded.
+            var lineEndings = await _repository.LineEndingOnlyChangesAsync(
+                changes.Where(c => c.Kind == FileChangeKind.Modified && !c.Staged).Select(c => c.Path));
+            var rest = changes.Where(c => !lineEndings.Contains(c.Path)).ToList();
+
+            if (rest.Count > 0)
+            {
+                var message = rest.Count == 1
+                    ? "Discard changes to " + rest[0].Path + "?"
+                    : "Discard changes to these " + rest.Count + " files?";
+                if (lineEndings.Count > 0) message += "\n\n(" + Plural(lineEndings.Count, "other file") + " only differ in line endings; you are asked about them next.)";
+                if (!Dialogs.Confirm(this, "Discard changes", message + "\n\nThis cannot be undone.", "Discard")) return;
+                await ExecuteAsync("Discarding...", () => _repository.DiscardAsync(rest));
+            }
+            if (lineEndings.Count > 0) await OfferLineEndingFixAsync(lineEndings.ToList());
+        }
+
+        /// <summary>
+        /// Explains why a line-endings-only change cannot be discarded and offers to stage the
+        /// files normalized - those files, or every file in the repository stored the same way.
+        /// </summary>
+        private async Task OfferLineEndingFixAsync(List<string> paths)
+        {
+            List<string> all;
+            try
+            {
+                all = await _repository.UnnormalizedFilesAsync();
+            }
+            catch (Exception)
+            {
+                all = new List<string>();
+            }
+            var everything = all.Union(paths, StringComparer.Ordinal).ToList();
+            int others = everything.Count - paths.Count;
+
+            var which = paths.Count == 1 ? paths[0] + " only differs" : Plural(paths.Count, "file") + " only differ";
+            var message = which + " in line endings (CRLF / LF); the content is the same." +
+                "\n\nThe repository's .gitattributes stores these files as LF text, but they were committed with CRLF. Git compares " +
+                "them as LF, so the difference comes back every time - discarding cannot remove it." +
+                "\n\nFix line endings stages the files with LF, as .gitattributes asks. The files on disk keep their content. " +
+                "Commit the result once and the change is gone for good." +
+                (others > 0 ? "\n\n" + Plural(others, "other file") + " in this repository are stored the same way and will show up as soon as they are touched." : string.Empty);
+
+            var choice = Dialogs.Show(this, "Only line endings changed", message,
+                paths.Count == 1 ? "Fix this file" : "Fix these files", others > 0 ? "Fix all " + everything.Count : null, "Cancel");
+            List<string> fix;
+            if (choice == DialogResult.OK) fix = paths;
+            else if (choice == DialogResult.No) fix = everything;
+            else return;
+
+            await ExecuteAsync("Normalizing line endings...", () => _repository.RenormalizeAsync(fix));
+            statusMessageLabel.Text = "Staged " + Plural(fix.Count, "file") + " with normalized line endings. Commit them to make it stick.";
+            if (summaryBox.Text.Trim().Length == 0) summaryBox.Text = "Normalize line endings";
         }
 
         private async void stageAllButton_Click(object sender, EventArgs e) =>

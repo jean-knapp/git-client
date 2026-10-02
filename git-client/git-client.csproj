@@ -125,6 +125,12 @@
     <Compile Include="Forms\GitIgnoreDialog.Designer.cs">
       <DependentUpon>GitIgnoreDialog.cs</DependentUpon>
     </Compile>
+    <Compile Include="Forms\PushTargetDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\PushTargetDialog.Designer.cs">
+      <DependentUpon>PushTargetDialog.cs</DependentUpon>
+    </Compile>
     <Compile Include="Forms\RemoteDialog.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -177,6 +183,7 @@
     <Compile Include="Git\GitRepository.cs" />
     <Compile Include="Git\GitResult.cs" />
     <Compile Include="Git\GitRunner.cs" />
+    <Compile Include="Git\GitRepository.LineEndings.cs" />
     <Compile Include="Git\GitRepository.Staging.cs" />
     <Compile Include="Git\Models.cs" />
     <Compile Include="Graph\GraphLayout.cs" />
