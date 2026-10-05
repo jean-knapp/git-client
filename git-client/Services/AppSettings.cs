@@ -30,6 +30,9 @@ namespace GitClient.Services
         public string ClaudeModel { get; set; }
         public int MaxCommits { get; set; } = 3000;
 
+        /// <summary>The .gitignore template last picked for a new repository; null for none.</summary>
+        public string NewRepositoryIgnoreTemplate { get; set; }
+
         /// <summary>Dark or light palette.</summary>
         public ThemeMode Theme { get; set; } = ThemeMode.Dark;
 

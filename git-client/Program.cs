@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using GitClient.Forms;
+using Velopack;
 
 namespace GitClient
 {
@@ -13,6 +14,9 @@ namespace GitClient
         [STAThread]
         private static void Main()
         {
+            // Velopack handles install, update and uninstall here; it must run first.
+            VelopackApp.Build().Run();
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
@@ -23,6 +27,7 @@ namespace GitClient
             TaskScheduler.UnobservedTaskException += (s, e) => { Log(e.Exception); e.SetObserved(); };
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
 
+            AppUpdater.CheckInBackground();
             Application.Run(new MainForm());
         }
 

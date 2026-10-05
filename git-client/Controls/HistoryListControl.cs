@@ -123,7 +123,7 @@ namespace GitClient.Controls
         /// <summary>Replaces the history, keeping the selected commit and scroll position where possible.</summary>
         public void SetData(GraphLayout layout, RepositoryStatus status)
         {
-            var keepSha = SelectedRow?.Commit?.Sha;
+            var keepSha = SelectedRow?.Sha;
             bool keepWip = SelectedRow != null && SelectedRow.IsWorkInProgress;
             int scroll = ScrollOffset;
 
@@ -133,7 +133,7 @@ namespace GitClient.Controls
 
             int index = -1;
             if (keepWip) index = _rows.FindIndex(r => r.IsWorkInProgress);
-            else if (keepSha != null) index = _rows.FindIndex(r => r.Commit != null && r.Commit.Sha == keepSha);
+            else if (keepSha != null) index = _rows.FindIndex(r => r.Sha == keepSha);
             RestoreState(index, scroll);
             Invalidate();
         }
@@ -152,8 +152,7 @@ namespace GitClient.Controls
                 {
                     foreach (var row in _layout.Rows)
                     {
-                        if (row.Commit == null) continue;
-                        if (Matches(row.Commit)) _rows.Add(row);
+                        if (row.Stash != null ? Matches(row.Stash) : row.Commit != null && Matches(row.Commit)) _rows.Add(row);
                     }
                 }
             }
@@ -170,10 +169,17 @@ namespace GitClient.Controls
                 || (commit.Sha ?? string.Empty).StartsWith(_filter, StringComparison.OrdinalIgnoreCase);
         }
 
+        private bool Matches(StashInfo stash)
+        {
+            return (stash.Description ?? string.Empty).IndexOf(_filter, StringComparison.OrdinalIgnoreCase) >= 0
+                || (stash.Branch ?? string.Empty).IndexOf(_filter, StringComparison.OrdinalIgnoreCase) >= 0
+                || "stash".IndexOf(_filter, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         public bool SelectSha(string sha)
         {
             if (sha == null) return false;
-            int index = _rows.FindIndex(r => r.Commit != null && r.Commit.Sha == sha);
+            int index = _rows.FindIndex(r => r.Sha == sha);
             if (index < 0) return false;
             SetSelection(index, true);
             EnsureVisible(index);
@@ -181,13 +187,15 @@ namespace GitClient.Controls
         }
 
         /// <summary>
-        /// Selects the working-tree row, or the newest commit when the working tree is clean and
-        /// there is no such row.
+        /// Selects the working-tree row, or the checked-out commit when the working tree is clean
+        /// and there is no such row (the newest commit when HEAD is not listed).
         /// </summary>
         public void SelectWorkInProgress()
         {
             if (_rows.Count == 0) return;
             int index = _rows.FindIndex(r => r.IsWorkInProgress);
+            if (index < 0 && _status?.HeadSha != null) index = _rows.FindIndex(r => r.Commit != null && r.Commit.Sha == _status.HeadSha);
+            if (index < 0) index = _rows.FindIndex(r => r.Commit != null);
             if (index < 0) index = 0;
             SetSelection(index, true);
             EnsureVisible(index);
@@ -243,8 +251,8 @@ namespace GitClient.Controls
             var surface = RowSurface;
             bool selected = (state & RowState.Selected) != 0;
 
-            if (selected) Draw.Fill(g, bounds, p.SelectionOn(surface));
-            else if ((state & RowState.Hot) != 0) Draw.Fill(g, bounds, p.HoverOn(surface));
+            _rowBackground = selected ? p.SelectionOn(surface) : (state & RowState.Hot) != 0 ? p.HoverOn(surface) : surface;
+            if (_rowBackground != surface) Draw.Fill(g, bounds, _rowBackground);
 
             if (selected)
             {
@@ -253,8 +261,20 @@ namespace GitClient.Controls
             }
 
             if (row.IsWorkInProgress) PaintWorkingTreeRow(g, row, bounds, selected);
+            else if (row.Stash != null) PaintStashRow(g, row, bounds, selected);
             else PaintCommitRow(g, row, bounds, selected);
         }
+
+        private Color _rowBackground;
+
+        /// <summary>
+        /// A colour faded towards the row background: how commits the checked-out branch does not
+        /// contain are drawn.
+        /// </summary>
+        private Color Faded(Color color) => ThemePalette.Flatten(Color.FromArgb(105, color), _rowBackground);
+
+        /// <summary>A lane's colour; a stash's line is neutral.</summary>
+        private Color LaneColorOf(int colorIndex) => colorIndex == GraphLayout.StashColor ? P.Foreground3 : P.LaneColor(colorIndex);
 
         private void PaintLanes(Graphics g, GraphRow row, Rectangle bounds)
         {
@@ -269,7 +289,8 @@ namespace GitClient.Controls
             {
                 int xf = LaneCenter(edge.FromColumn);
                 int xt = LaneCenter(edge.ToColumn);
-                using (var pen = new Pen(P.LaneColor(edge.ColorIndex), 2f))
+                var color = LaneColorOf(edge.ColorIndex);
+                using (var pen = new Pen(edge.OffHead ? Faded(color) : color, 2f))
                 {
                     if (edge.Dashed) pen.DashStyle = DashStyle.Dot;
                     if (xf == xt)
@@ -285,11 +306,13 @@ namespace GitClient.Controls
             }
 
             // The upward half of this row's own lane, so consecutive rows form one continuous stem.
-            if (row.Index > 0 && !row.IsWorkInProgress)
+            if (row.HasStem)
             {
                 int x = LaneCenter(row.Column);
-                using (var pen = new Pen(P.LaneColor(row.ColorIndex), 2f))
+                var color = LaneColorOf(row.StemFromStash ? GraphLayout.StashColor : row.ColorIndex);
+                using (var pen = new Pen(row.StemOffHead ? Faded(color) : color, 2f))
                 {
+                    if (row.StemFromStash) pen.DashStyle = DashStyle.Dot;
                     g.DrawLine(pen, x, bounds.Y - bounds.Height / 2, x, centerY);
                 }
             }
@@ -386,6 +409,8 @@ namespace GitClient.Controls
             int centerY = bounds.Y + bounds.Height / 2;
             int cx = LaneCenter(row.Column);
             var lane = p.LaneColor(row.ColorIndex);
+            bool faded = row.OffHead;
+            if (faded) lane = Faded(lane);
 
             var old = g.SmoothingMode;
             g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -425,19 +450,73 @@ namespace GitClient.Controls
             int messageRight = AuthorLeft > CommitLeft + 60 ? AuthorLeft : TrackRight;
             Draw.Text(g, commit.Subject ?? string.Empty, messageFont,
                 new Rectangle(messageLeft, bounds.Y, Math.Max(0, messageRight - messageLeft - MessageRightPadding), bounds.Height),
-                p.Foreground, Draw.LeftMiddle);
+                faded ? Faded(p.Foreground) : p.Foreground, Draw.LeftMiddle);
 
             if (AuthorLeft > CommitLeft + 60)
             {
                 var avatar = new Rectangle(AuthorLeft, centerY - 10, 20, 20);
+                var avatarFore = faded ? Faded(p.Lane2) : p.Lane2;
                 Draw.Avatar(g, avatar, Draw.Initials(commit.AuthorName), Fonts.Ui(9f, true),
-                    Color.FromArgb(p.Mode == ThemeMode.Light ? 36 : 56, p.Lane2), p.Lane2);
+                    Color.FromArgb(p.Mode == ThemeMode.Light ? 36 : 56, avatarFore), avatarFore);
                 Draw.Text(g, commit.AuthorName ?? string.Empty, Fonts.Ui(13f),
-                    new Rectangle(AuthorLeft + 28, bounds.Y, AuthorColumnWidth - 28 - 8, bounds.Height), p.Foreground2, Draw.LeftMiddle);
+                    new Rectangle(AuthorLeft + 28, bounds.Y, AuthorColumnWidth - 28 - 8, bounds.Height), faded ? Faded(p.Foreground2) : p.Foreground2, Draw.LeftMiddle);
 
+                var dateColor = selected ? p.Foreground2 : p.Foreground3;
                 Draw.Text(g, FormatDate(commit.AuthorDate), Fonts.Ui(13f),
                     new Rectangle(DateLeft, bounds.Y, DateColumnWidth, bounds.Height),
-                    selected ? p.Foreground2 : p.Foreground3, Draw.LeftMiddle);
+                    faded ? Faded(dateColor) : dateColor, Draw.LeftMiddle);
+            }
+        }
+
+        /// <summary>
+        /// A stash: a box on a dashed neutral line that runs down to the commit it was made on, a
+        /// "stash" pill with its branch, and what was stashed.
+        /// </summary>
+        private void PaintStashRow(Graphics g, GraphRow row, Rectangle bounds, bool selected)
+        {
+            var p = P;
+            var stash = row.Stash;
+            bool faded = row.OffHead;
+            Color Tone(Color c) => faded ? Faded(c) : c;
+
+            PaintLanes(g, row, bounds);
+
+            int centerY = bounds.Y + bounds.Height / 2;
+            if (_filter.Length == 0)
+            {
+                int cx = LaneCenter(row.Column);
+                var box = new Rectangle(cx - 8, centerY - 8, 16, 16);
+                Draw.FillRounded(g, box, 4f, _rowBackground);
+                using (var pen = new Pen(Tone(p.Foreground3), 1.6f) { DashStyle = DashStyle.Dot })
+                {
+                    g.DrawRectangle(pen, box.X + 1, box.Y + 1, box.Width - 2, box.Height - 2);
+                }
+                IconCache.DrawCentered(g, Icons.Stash, 10, Tone(p.Foreground2), cx, centerY);
+            }
+
+            // The pill: "stash" and the branch it was made on.
+            int x = _filter.Length == 0 ? PillStart : CommitLeft;
+            var pillFont = Fonts.Ui(11.5f, true);
+            var pillText = "stash" + (stash.Branch != null ? " · " + stash.Branch : string.Empty);
+            int pillWidth = Math.Min(220, 8 + 11 + 5 + Draw.MeasureWidth(pillText, pillFont) + 8);
+            var pill = new Rectangle(x, centerY - 10, pillWidth, 20);
+            var fore = Tone(p.Foreground2);
+            Draw.FillRounded(g, pill, 4f, ThemePalette.Flatten(Color.FromArgb(28, fore), _rowBackground));
+            Draw.DrawRounded(g, new Rectangle(pill.X, pill.Y, pill.Width - 1, pill.Height - 1), 4f, ThemePalette.Flatten(Color.FromArgb(90, fore), _rowBackground));
+            IconCache.DrawLeft(g, Icons.Stash, 11, fore, new Rectangle(pill.X + 8, pill.Y, 11, pill.Height));
+            Draw.Text(g, pillText, pillFont, new Rectangle(pill.X + 8 + 11 + 5, pill.Y, Math.Max(0, pill.Right - 8 - (pill.X + 24)), pill.Height), fore, Draw.LeftMiddle);
+
+            int messageLeft = Math.Max(CommitLeft, pill.Right + 9);
+            int messageRight = AuthorLeft > CommitLeft + 60 ? AuthorLeft : TrackRight;
+            Draw.Text(g, stash.Description ?? stash.Message ?? string.Empty, Fonts.Ui(14f),
+                new Rectangle(messageLeft, bounds.Y, Math.Max(0, messageRight - messageLeft - MessageRightPadding), bounds.Height),
+                Tone(p.Foreground2), Draw.LeftMiddle);
+
+            if (AuthorLeft > CommitLeft + 60)
+            {
+                var dim = Tone(selected ? p.Foreground2 : p.Foreground3);
+                Draw.Text(g, stash.Selector, Fonts.Ui(13f), new Rectangle(AuthorLeft, bounds.Y, AuthorColumnWidth, bounds.Height), dim, Draw.LeftMiddle);
+                Draw.Text(g, FormatDate(stash.Date), Fonts.Ui(13f), new Rectangle(DateLeft, bounds.Y, DateColumnWidth, bounds.Height), dim, Draw.LeftMiddle);
             }
         }
 

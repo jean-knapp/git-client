@@ -800,6 +800,12 @@ namespace GitClient.Git
 
         public Task<GitResult> StashDropAsync(int index) => RunAsync("stash", "drop", "stash@{" + index + "}");
 
+        /// <summary>
+        /// Creates <paramref name="name"/> at the commit the stash was made on, checks it out, applies
+        /// the stash there and drops it when it applied cleanly.
+        /// </summary>
+        public Task<GitResult> StashBranchAsync(string name, int index) => RunAsync("stash", "branch", name, "stash@{" + index + "}");
+
         // ------------------------------------------------------------------ misc
 
         /// <summary>Turns a remote URL into a browsable web URL (GitHub/GitLab style), or null.</summary>

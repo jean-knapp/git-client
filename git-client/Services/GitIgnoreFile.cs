@@ -42,6 +42,20 @@ namespace GitClient.Services
             return wanted.Count;
         }
 
+        /// <summary>Adds a template's rules to the end of the file, a blank line after anything already there.</summary>
+        public static void AppendTemplate(string workingDirectory, GitIgnoreTemplate template)
+        {
+            var addition = Normalize(template?.Content ?? string.Empty).TrimEnd();
+            if (addition.Length == 0) return;
+            var text = Read(workingDirectory);
+            if (text.Trim().Length > 0)
+            {
+                if (!text.EndsWith("\n", StringComparison.Ordinal)) text += Environment.NewLine;
+                text += Environment.NewLine;
+            }
+            Write(workingDirectory, text + addition + Environment.NewLine);
+        }
+
         /// <summary>Is this pattern already a line of the file?</summary>
         public static bool Contains(string workingDirectory, string pattern)
         {

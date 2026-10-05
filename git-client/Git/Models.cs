@@ -208,6 +208,12 @@ namespace GitClient.Git
         /// <summary>The branch the stash was made on; null when it was made on a detached HEAD.</summary>
         public string Branch { get; set; }
 
+        /// <summary>The commit HEAD was on when the stash was made: the stash commit's first parent.</summary>
+        public string BaseSha { get; set; }
+
+        /// <summary>The commit holding the stashed untracked files (its third parent), or null when none were stashed.</summary>
+        public string UntrackedSha { get; set; }
+
         /// <summary>What was stashed, without git's "WIP on branch:" prefix: the message given, or the commit it was based on.</summary>
         public string Description { get; set; }
 

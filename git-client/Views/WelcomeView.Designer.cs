@@ -29,7 +29,6 @@
             this.subheadLabel = new GitClient.Controls.TextLabel();
             this.openCard = new GitClient.Controls.ActionCard();
             this.cloneCard = new GitClient.Controls.ActionCard();
-            this.initCard = new GitClient.Controls.ActionCard();
             this.recentLabel = new GitClient.Controls.TextLabel();
             this.recentRule = new GitClient.Controls.SurfacePanel();
             this.recentCard = new GitClient.Controls.SurfacePanel();
@@ -72,7 +71,6 @@
             this.contentPanel.Controls.Add(this.subheadLabel);
             this.contentPanel.Controls.Add(this.openCard);
             this.contentPanel.Controls.Add(this.cloneCard);
-            this.contentPanel.Controls.Add(this.initCard);
             this.contentPanel.Controls.Add(this.recentLabel);
             this.contentPanel.Controls.Add(this.recentRule);
             this.contentPanel.Controls.Add(this.recentCard);
@@ -105,12 +103,12 @@
             //
             // openCard
             //
-            this.openCard.Description = "Pick a folder that already has a .git directory";
+            this.openCard.Description = "Pick a project folder; if it isn't a repository yet, you can create one there";
             this.openCard.IconSvg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path fill=\"currentColor" +
                 "\" d=\"M3 5h6l2 2h10v12H3z\"/></svg>";
             this.openCard.Location = new System.Drawing.Point(0, 102);
             this.openCard.Name = "openCard";
-            this.openCard.Size = new System.Drawing.Size(285, 96);
+            this.openCard.Size = new System.Drawing.Size(434, 96);
             this.openCard.TabIndex = 2;
             this.openCard.Title = "Open a repository";
             this.openCard.Click += new System.EventHandler(this.openCard_Click);
@@ -121,24 +119,12 @@
             this.cloneCard.IconSvg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path fill=\"currentColor" +
                 "\" d=\"M11 3h2v9.2l3.5-3.5 1.4 1.4L12 16 6.1 10.1l1.4-1.4L11 12.2z\"/><path fill=\"none\" " +
                 "stroke=\"currentColor\" stroke-width=\"2\" d=\"M4 15v5h16v-5\"/></svg>";
-            this.cloneCard.Location = new System.Drawing.Point(297, 102);
+            this.cloneCard.Location = new System.Drawing.Point(446, 102);
             this.cloneCard.Name = "cloneCard";
-            this.cloneCard.Size = new System.Drawing.Size(285, 96);
+            this.cloneCard.Size = new System.Drawing.Size(434, 96);
             this.cloneCard.TabIndex = 3;
             this.cloneCard.Title = "Clone from a URL";
             this.cloneCard.Click += new System.EventHandler(this.cloneCard_Click);
-            //
-            // initCard
-            //
-            this.initCard.Description = "Run git init in a folder you choose";
-            this.initCard.IconSvg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path fill=\"currentColor" +
-                "\" d=\"M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z\"/></svg>";
-            this.initCard.Location = new System.Drawing.Point(594, 102);
-            this.initCard.Name = "initCard";
-            this.initCard.Size = new System.Drawing.Size(286, 96);
-            this.initCard.TabIndex = 4;
-            this.initCard.Title = "Create a repository";
-            this.initCard.Click += new System.EventHandler(this.initCard_Click);
             //
             // recentLabel
             //
@@ -200,7 +186,6 @@
         private GitClient.Controls.TextLabel subheadLabel;
         private GitClient.Controls.ActionCard openCard;
         private GitClient.Controls.ActionCard cloneCard;
-        private GitClient.Controls.ActionCard initCard;
         private GitClient.Controls.TextLabel recentLabel;
         private GitClient.Controls.SurfacePanel recentRule;
         private GitClient.Controls.SurfacePanel recentCard;

@@ -15,7 +15,7 @@ namespace GitClient.Views
         public string Path { get; }
     }
 
-    /// <summary>The no-repository screen: three action cards over the recent-repository list.</summary>
+    /// <summary>The no-repository screen: two action cards over the recent-repository list.</summary>
     public partial class WelcomeView : ModernUserControl
     {
         private const int SidePadding = 80;
@@ -24,10 +24,9 @@ namespace GitClient.Views
         // fit on one line at 13 px instead of ellipsising.
         private const int MaxContentWidth = 1040;
 
-        /// <summary>Raised when one of the three action cards is chosen.</summary>
+        /// <summary>Raised when one of the action cards is chosen.</summary>
         public event EventHandler OpenRequested;
         public event EventHandler CloneRequested;
-        public event EventHandler InitRequested;
 
         /// <summary>Raised when a recent repository is picked.</summary>
         public event EventHandler<RepositoryRequestedEventArgs> RecentRequested;
@@ -46,8 +45,6 @@ namespace GitClient.Views
             openCard.TileForeground = p.AccentFill;
             cloneCard.TileFill = Color.FromArgb(41, p.Lane2);
             cloneCard.TileForeground = p.Mode == ThemeMode.Light ? p.Lane2 : Color.FromArgb(0xc9, 0xa6, 0xff);
-            initCard.TileFill = Color.FromArgb(36, p.Added);
-            initCard.TileForeground = p.Mode == ThemeMode.Light ? p.Added : Color.FromArgb(0x8f, 0xdc, 0x9f);
         }
 
         /// <summary>Fills the recent list, dropping folders that no longer exist.</summary>
@@ -82,7 +79,7 @@ namespace GitClient.Views
             LayoutContent();
         }
 
-        /// <summary>Centres the 880 px content column and shares the row width between the three cards.</summary>
+        /// <summary>Centres the 880 px content column and shares the row width between the two cards.</summary>
         private void LayoutContent()
         {
             int available = Math.Max(320, Width - SidePadding * 2);
@@ -95,10 +92,9 @@ namespace GitClient.Views
             contentPanel.Location = new Point((Width - width) / 2, Math.Max(20, (Height - height) / 2));
 
             const int gap = 12;
-            int cardWidth = (width - gap * 2) / 3;
+            int cardWidth = (width - gap) / 2;
             openCard.SetBounds(0, 102, cardWidth, 96);
-            cloneCard.SetBounds(cardWidth + gap, 102, cardWidth, 96);
-            initCard.SetBounds((cardWidth + gap) * 2, 102, width - (cardWidth + gap) * 2, 96);
+            cloneCard.SetBounds(cardWidth + gap, 102, width - cardWidth - gap, 96);
 
             headingLabel.Width = width;
             subheadLabel.Width = width;
@@ -110,7 +106,6 @@ namespace GitClient.Views
 
         private void openCard_Click(object sender, EventArgs e) => OpenRequested?.Invoke(this, EventArgs.Empty);
         private void cloneCard_Click(object sender, EventArgs e) => CloneRequested?.Invoke(this, EventArgs.Empty);
-        private void initCard_Click(object sender, EventArgs e) => InitRequested?.Invoke(this, EventArgs.Empty);
 
         private void recentList_RowDoubleClick(object sender, RowMouseEventArgs e) => OpenRecent(e.Index);
 

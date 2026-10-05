@@ -150,7 +150,6 @@
             this.welcomeView.TabIndex = 0;
             this.welcomeView.OpenRequested += new System.EventHandler(this.openRepositoryItem_Click);
             this.welcomeView.CloneRequested += new System.EventHandler(this.cloneRepositoryItem_Click);
-            this.welcomeView.InitRequested += new System.EventHandler(this.initRepositoryItem_Click);
             this.welcomeView.RecentRequested += new System.EventHandler<GitClient.Views.RepositoryRequestedEventArgs>(this.welcomeView_RecentRequested);
             //
             // MainForm

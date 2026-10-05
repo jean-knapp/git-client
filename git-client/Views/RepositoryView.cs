@@ -343,7 +343,7 @@ namespace GitClient.Views
                 _unstagedStats = unstagedTask.Result;
 
                 AttachRefsToCommits();
-                _layout = GraphLayout.Build(_commits, _status.HeadSha, _status.HasChanges);
+                _layout = GraphLayout.Build(_commits, _status.HeadSha, _status.HasChanges, _stashes);
                 historyList.SetData(_layout, _status);
                 changesList.SetStatus(_status, _stagedStats, _unstagedStats);
 
@@ -597,6 +597,12 @@ namespace GitClient.Views
                 return;
             }
 
+            if (row.Stash != null)
+            {
+                await ShowStashDetailAsync(row);
+                return;
+            }
+
             var commit = row.Commit;
             detailAvatar.PersonName = commit.AuthorName;
             detailSubjectLabel.Text = commit.Subject;
@@ -627,6 +633,66 @@ namespace GitClient.Views
             }
         }
 
+        /// <summary>For the stash on show: which commit each listed file's diff comes from.</summary>
+        private Dictionary<string, CommitInfo> _stashFileSources = new Dictionary<string, CommitInfo>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The stash's tracked changes as a commit on top of the one it was made on, so the commit
+        /// diff helpers show exactly what was stashed.
+        /// </summary>
+        private static CommitInfo StashChanges(StashInfo stash) =>
+            new CommitInfo { Sha = stash.Sha, Parents = new List<string> { stash.BaseSha }, Subject = stash.Description };
+
+        /// <summary>The stashed untracked files, as a commit that adds each of them; null when there were none.</summary>
+        private static CommitInfo StashUntracked(StashInfo stash) =>
+            stash.UntrackedSha == null ? null : new CommitInfo { Sha = stash.UntrackedSha, Subject = stash.Description };
+
+        private async Task ShowStashDetailAsync(GraphRow row)
+        {
+            var stash = row.Stash;
+            detailAvatar.PersonName = string.Empty;
+            detailSubjectLabel.Text = stash.Description;
+            detailSubjectLabel.Role = TextRole.Primary;
+            detailMetaLabel.Text = "stash" + (stash.Branch != null ? " on " + stash.Branch : string.Empty) + "  ·  " + historyList.FormatDate(stash.Date) + "  ·  ";
+            detailMetaLabel.Width = detailMetaLabel.PreferredWidth + 2;
+            detailShaChip.Visible = true;
+            detailShaChip.Text = Short(stash.Sha);
+            detailShaChip.Left = detailMetaLabel.Right;
+            detailParentLabel.Text = "·  made on " + Short(stash.BaseSha);
+            detailParentLabel.Left = detailShaChip.Right + 8;
+            copyShaButton.Enabled = true;
+            revertButton.Enabled = false;
+
+            try
+            {
+                var changes = StashChanges(stash);
+                var untracked = StashUntracked(stash);
+                var filesTask = _repository.GetCommitFilesAsync(changes);
+                var statsTask = _repository.GetCommitNumstatAsync(changes);
+                var untrackedFilesTask = untracked != null ? _repository.GetCommitFilesAsync(untracked) : Task.FromResult(new List<FileChange>());
+                var untrackedStatsTask = untracked != null ? _repository.GetCommitNumstatAsync(untracked) : Task.FromResult(new Dictionary<string, LineDelta>());
+                await Task.WhenAll(filesTask, statsTask, untrackedFilesTask, untrackedStatsTask);
+                if (historyList.SelectedRow != row) return;
+
+                var sources = new Dictionary<string, CommitInfo>(StringComparer.Ordinal);
+                foreach (var file in filesTask.Result) sources[file.Path] = changes;
+                foreach (var file in untrackedFilesTask.Result) sources[file.Path] = untracked;
+                _stashFileSources = sources;
+
+                var stats = new Dictionary<string, LineDelta>(statsTask.Result, StringComparer.Ordinal);
+                foreach (var pair in untrackedStatsTask.Result) stats[pair.Key] = pair.Value;
+                var files = filesTask.Result.Concat(untrackedFilesTask.Result).ToList();
+                commitFilesList.SetFiles(files, stats, files.Count + (files.Count == 1 ? " file stashed" : " files stashed") +
+                    (untrackedFilesTask.Result.Count > 0 ? " (" + untrackedFilesTask.Result.Count + " untracked)" : string.Empty));
+                commitFilesList.SelectFirst();
+                await ShowDiffForSelectionAsync();
+            }
+            catch (Exception ex)
+            {
+                statusMessageLabel.Text = ex.Message;
+            }
+        }
+
         private async Task ShowDiffForSelectionAsync()
         {
             var change = commitFilesList.SelectedChange;
@@ -642,6 +708,12 @@ namespace GitClient.Views
             {
                 DiffDocument document;
                 if (row == null || row.IsWorkInProgress) document = await _repository.GetWorkingDiffAsync(change);
+                else if (row.Stash != null)
+                {
+                    CommitInfo source;
+                    if (!_stashFileSources.TryGetValue(change.Path, out source)) source = StashChanges(row.Stash);
+                    document = await _repository.GetCommitFileDiffAsync(source, change);
+                }
                 else document = await _repository.GetCommitFileDiffAsync(row.Commit, change);
                 diffView.SetDocument(document);
             }
@@ -1377,6 +1449,59 @@ namespace GitClient.Views
             });
         }
 
+        /// <summary>The history's right-click menu on a stash row.</summary>
+        private void AddStashRowItems(ModernContextMenu menu, StashInfo stash)
+        {
+            var into = _status.Branch ?? "HEAD";
+            var apply = menu.Items.Add("Apply to " + into);
+            apply.SvgIcon = Icons.Stash;
+            apply.Click += async (s, e) => await ApplyStashAsync(stash, false);
+
+            var pop = menu.Items.Add("Pop to " + into + " (apply, then drop)");
+            pop.SvgIcon = Icons.Pop;
+            pop.Click += async (s, e) => await ApplyStashAsync(stash, true);
+
+            var branch = menu.Items.Add("Create branch from stash...");
+            branch.SvgIcon = Icons.Branch;
+            branch.Click += async (s, e) => await BranchFromStashAsync(stash);
+
+            var copyMessage = menu.Items.Add("Copy message");
+            copyMessage.SvgIcon = Icons.Copy;
+            copyMessage.BeginGroup = true;
+            copyMessage.Click += (s, e) => CopyToClipboard(stash.Description);
+
+            var copySha = menu.Items.Add("Copy sha");
+            copySha.SvgIcon = Icons.Copy;
+            copySha.Click += (s, e) => CopyToClipboard(stash.Sha);
+
+            var drop = menu.Items.Add("Drop stash...");
+            drop.SvgIcon = Icons.Trash;
+            drop.BeginGroup = true;
+            drop.Click += async (s, e) => await DropStashAsync(stash);
+        }
+
+        /// <summary>
+        /// <c>git stash branch</c>: a new branch at the commit the stash was made on, with the stash
+        /// applied there, so it applies without conflicts however far the original branch moved.
+        /// </summary>
+        private async Task BranchFromStashAsync(StashInfo stash)
+        {
+            int index = CurrentIndexOf(stash);
+            if (index < 0) return;
+            using (var dialog = new TextInputDialog())
+            {
+                dialog.Caption = "Create branch from stash";
+                dialog.Prompt = "Branch name. It starts at " + Short(stash.BaseSha) + ", where the stash was made, and the stash is applied there, then dropped.";
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                var name = dialog.Value.Trim();
+                await ExecuteAsync("Creating branch from stash...", async () =>
+                {
+                    var result = await _repository.StashBranchAsync(name, index);
+                    ReportResult(result, "Create branch from stash", "Created " + name + " with the stash applied.");
+                });
+            }
+        }
+
         private async Task DropStashAsync(StashInfo stash)
         {
             int index = CurrentIndexOf(stash);
@@ -1489,8 +1614,8 @@ namespace GitClient.Views
 
         private void copyShaButton_Click(object sender, EventArgs e)
         {
-            var commit = historyList.SelectedRow?.Commit;
-            if (commit != null) CopyToClipboard(commit.Sha);
+            var sha = historyList.SelectedRow?.Sha;
+            if (sha != null) CopyToClipboard(sha);
         }
 
         private async void revertButton_Click(object sender, EventArgs e)
@@ -1550,6 +1675,13 @@ namespace GitClient.Views
                 discardAll.SvgIcon = Icons.Discard;
                 discardAll.Enabled = _status.HasChanges;
                 discardAll.Click += async (s, e) => await DiscardAsync(_status.Unstaged.ToList());
+                menu.Show(historyList, screenLocation);
+                return;
+            }
+
+            if (row.Stash != null)
+            {
+                AddStashRowItems(menu, row.Stash);
                 menu.Show(historyList, screenLocation);
                 return;
             }

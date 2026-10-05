@@ -242,7 +242,7 @@ namespace GitClient.Git
         }
 
         /// <summary>Format for <c>git stash list</c>, see <see cref="ParseStashList"/>.</summary>
-        public const string StashFormat = "%H%x1f%s%x1f%ci";
+        public const string StashFormat = "%H%x1f%s%x1f%ci%x1f%P";
 
         public static List<StashInfo> ParseStashList(string output)
         {
@@ -256,6 +256,10 @@ namespace GitClient.Git
                 var f = line.Split(FieldSeparator);
                 if (f.Length < 3) continue;
                 var stash = new StashInfo { Index = index++, Sha = f[0], Message = f[1], Date = ParseDate(f[2]), Description = f[1] };
+                // Parents: the commit stashed on, the index, and the untracked files when there were any.
+                var parents = f.Length > 3 ? f[3].Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries) : new string[0];
+                if (parents.Length > 0) stash.BaseSha = parents[0];
+                if (parents.Length > 2) stash.UntrackedSha = parents[2];
                 // git writes "WIP on <branch>: <sha> <subject>", or "On <branch>: <message>" when a
                 // message was given. Branch names cannot contain ':', so the first ": " ends the name.
                 var match = StashSubject.Match(f[1]);

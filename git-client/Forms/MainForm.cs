@@ -195,7 +195,7 @@ namespace GitClient.Forms
 
         // ------------------------------------------------------------------ repositories
 
-        private async Task<bool> OpenRepositoryAsync(string path, bool activate)
+        private async Task<bool> OpenRepositoryAsync(string path, bool activate, bool offerInit = false)
         {
             string root;
             try
@@ -209,8 +209,12 @@ namespace GitClient.Forms
             }
             if (root == null)
             {
-                Dialogs.Warning(this, "Open repository", path + "\n\nis not inside a git repository.");
-                return false;
+                if (!offerInit)
+                {
+                    Dialogs.Warning(this, "Open repository", path + "\n\nis not inside a git repository.");
+                    return false;
+                }
+                return await InitRepositoryAsync(path, "This folder is not inside a git repository. Create one here?");
             }
 
             var existing = _views.FindIndex(v => string.Equals(v.RepositoryPath, root, StringComparison.OrdinalIgnoreCase));
@@ -479,7 +483,7 @@ namespace GitClient.Forms
             var start = recent != null ? Path.GetDirectoryName(recent) : null;
             var path = FolderPicker.Show(this, "Choose a git repository", start);
             if (path == null) return;
-            await OpenRepositoryAsync(path, true);
+            await OpenRepositoryAsync(path, true, offerInit: true);
         }
 
         private async void cloneRepositoryItem_Click(object sender, EventArgs e)
@@ -500,14 +504,40 @@ namespace GitClient.Forms
                 await OpenRepositoryAsync(path, true);
                 return;
             }
-            if (!Dialogs.Confirm(this, "Create repository", "Run git init in\n\n" + path + "?", "Create")) return;
+            await InitRepositoryAsync(path, null);
+        }
+
+        /// <summary>
+        /// Asks to run git init in <paramref name="path"/>, with a .gitignore template to start from,
+        /// then opens the new repository.
+        /// </summary>
+        private async Task<bool> InitRepositoryAsync(string path, string message)
+        {
+            GitIgnoreTemplate template;
+            using (var dialog = new NewRepositoryDialog(path, message))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+                template = dialog.SelectedTemplate;
+            }
+
             var result = await GitRepository.InitAsync(path);
             if (!result.Succeeded)
             {
                 Dialogs.Error(this, "Create repository", result.Message);
-                return;
+                return false;
             }
-            await OpenRepositoryAsync(path, true);
+            if (template != null)
+            {
+                try
+                {
+                    GitIgnoreFile.AppendTemplate(path, template);
+                }
+                catch (Exception ex)
+                {
+                    Dialogs.Error(this, "Create repository", "The repository was created, but the .gitignore could not be written.\n\n" + ex.Message);
+                }
+            }
+            return await OpenRepositoryAsync(path, true);
         }
 
         private async void welcomeView_RecentRequested(object sender, RepositoryRequestedEventArgs e)
