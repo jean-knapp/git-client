@@ -6,6 +6,12 @@ using System.Xml.Serialization;
 namespace GitClient.Services
 {
     /// <summary>User preferences and session state, persisted as XML under %APPDATA%\GitClient.</summary>
+    /// <remarks>
+    /// XmlSerializer reads and writes these by name, so the release build's obfuscator must leave
+    /// the names alone: renamed, the serializer rejects the class and nothing is ever saved. The
+    /// enums it stores (ThemeMode, DiffLayout) carry the same attribute.
+    /// </remarks>
+    [System.Reflection.Obfuscation(Exclude = true, ApplyToMembers = true)]
     public sealed class AppSettings
     {
         private static AppSettings _current;

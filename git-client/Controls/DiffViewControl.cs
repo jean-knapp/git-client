@@ -10,6 +10,8 @@ using ModernWinForms;
 
 namespace GitClient.Controls
 {
+    /// <summary>Saved in the settings by name, so the obfuscator leaves its names alone.</summary>
+    [System.Reflection.Obfuscation(Exclude = true, ApplyToMembers = true)]
     public enum DiffLayout
     {
         Unified,
